@@ -34,22 +34,44 @@ for (i in seq(length(rdata))){
 }
 
 # make the average of the medians of the control data sets
+
+
+# NEED TO FIRST SPLIT BY CELL LINE, THEN BY TIME POINT FOR THE CONTROLS
+# COMPARE TREATMENTS TO CONTROLS, ALSO HAVE DIFFERENT TARGETS
+
 controls <- as.list(c(1,1,1,4,4,4,7,7,7,10,10,10,13,13,13))
-unique(controls)
-ctrl_abs_mean <- mean(c(logmedians[[1]], logmedians[[4]]))
+timepoints <- c(1,1,1,1,1,1,2,2,2,2,2,2,2,2,2)
 
 
-# adjust the data sets to the absolute mean using the median absolute deviation
 normdata <- list()
 logmads <- list()
-normfactors <- list()
-temp_normdata <- list()
-for (i in seq(length(logdata))){
-  logmads[[i]] <- mad(logdata[[i]], constant = ctrl_abs_mean)
-  temp_normdata[[i]] <- logdata[[i]] - logmads[[controls[[i]]]]
-  normfactors[[i]] <- median(temp_normdata[[controls[[i]]]])
-  normdata[[i]] <- temp_normdata[[i]] / normfactors[[i]]
+maddata <- list()
+ctrl_abs_mean <- array()
+normfactors <- array()
+
+# adjusts the datasets to the control absolute means for each time point. may need to do this differently
+for (j in seq(max(timepoints))){
+  ctrl_abs_mean[j] <- mean(as.numeric(logmedians[as.numeric(unique(controls[which(timepoints == j)]))]))
+  for (i in seq(length(logdata))){
+    logmads[[i]] <- mad(logdata[[i]], constant = ctrl_abs_mean[j])
+    maddata[[i]] <- logdata[[i]] - logmads[[controls[[i]]]]
+    normfactors[i] <- median(maddata[[controls[[i]]]])
+    normdata[[i]] <- maddata[[i]] / normfactors[i]
+  }
 }
+
+ctrl_abs_mean
+
+#---- Make the log, MAD and normalized dataframes for plotting ----
+log_dfs <- list()
+mad_dfs <- list()
+dfs <- list()
+for (i in seq(length(maddata))){
+  log_dfs[[i]] <- data.frame(fl = logdata[[i]], set = dataset_name[[i]])
+  mad_dfs[[i]] <- data.frame(fl = maddata[[i]], set = dataset_name[[i]])
+  dfs[[i]] <- data.frame(fl = normdata[[i]], set = dataset_name[[i]])
+}
+
 
 
 
@@ -58,16 +80,31 @@ theme_set(theme_bw())
 theme_update(plot.title = element_text(hjust = 0.5),
              panel.grid.major = element_blank(),
              panel.grid.minor = element_blank())
+alp = 0.2
+bw = 0.5
+
+# compare the control groups in log space and not normalized
+ggplot(log_dfs[[1]], aes(fl)) + 
+  geom_density(aes(fill = set), alpha = alp, adjust = bw) + 
+  geom_density(data = log_dfs[[4]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
+  geom_density(data = log_dfs[[7]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
+  geom_density(data = log_dfs[[10]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
+  geom_density(data = log_dfs[[13]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
+  geom_vline(xintercept = ctrl_abs_mean, aes(color))
 
 
-dfs <- list()
-for (i in seq(length(normdata))){
-  dfs[[i]] <- data.frame(fl = normdata[[i]], set = dataset_name[[i]])
-}
+ggplot(mad_dfs[[1]], aes(fl)) + 
+  geom_density(aes(fill = set), alpha = alp, adjust = bw) + 
+  geom_density(data = mad_dfs[[4]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
+  geom_density(data = mad_dfs[[7]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
+  geom_density(data = mad_dfs[[10]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
+  geom_density(data = mad_dfs[[13]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
+  geom_vline(xintercept = unique(normfactors))
 
 ggplot(dfs[[1]], aes(fl)) + 
   geom_density(aes(fill = 'Control')) + 
-  geom_rug(aes(x = fl, y = 0), position = position_jitter(height = 0))
+  geom_rug(aes(x = fl, y = 0), position = position_jitter(height = 0)) + 
+  geom_histogram(aes(fill = 'Black'), binwidth = 0.002)
 
 ggplot(dfs[[1]], aes(fl)) + 
   geom_histogram(aes(fill = 'Control'), binwidth = 0.002)
