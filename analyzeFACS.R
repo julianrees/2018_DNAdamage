@@ -10,7 +10,14 @@ library(outliers)
 
 setwd('./')
 #---- Data import from the listed folders ----
-folders <- c("Data/4h_gH2aX_BT549/", "Data/24h_gH2aX_BT549/")
+folders <- c("Data/ATF2/24h_BT549_ATF2/", 
+             "Data/ATF2/4h_BT549_pATF2/",
+             "Data/ATF2/24h_24h_BT549_ATF2/", 
+             "Data/ATF2/4h_24h_BT549_ATF2/",
+             "Data/ATF2/24h_SKBR3_pATF2/", 
+             "Data/ATF2/4h_SKBR3_pATF2/",
+             "Data/ATF2/24h_24h_SKBR3_ATF2/", 
+             "Data/ATF2/4_24h_SKBR3_ATF2/")
 
 temp_rdata <- list()
 rdata <- list()
@@ -40,9 +47,14 @@ for (i in seq(length(rdata))){
 
 # NEED TO FIRST SPLIT BY CELL LINE, THEN BY TIME POINT FOR THE CONTROLS
 # COMPARE TREATMENTS TO CONTROLS, ALSO HAVE DIFFERENT TARGETS
-
-controls <- as.list(c(1,1,1,4,4,4,7,7,7,10,10,10,13,13,13))
-timepoints <- c(1,1,1,1,1,1,2,2,2,2,2,2,2,2,2)
+dataset_name
+controls <- as.list(c(1,1,1,4,4,4,7,7,7,11,11,11,12,12,12,15,15,15,
+                      18,18,18,21,21,21,24,24,24,27,27,27,31,31,31,
+                      32,32,32,35,35,35,38,38,38,41,41,41,44,44,44,
+                      47,47,47,50,50,50,53,53,53,56,56,56,59,59,59,
+                      62,62,62,65,65,65,68,68,68,71,71,71,74,74,74,
+                      77,77,77,80,80,80,83,83,83,86,86,86))
+timepoints <- c(1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2)
 includecontrols <- c(1,1,1,0,0,0,1,1,1,1,1,1,0,0,0)
 includecontrols <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)
 
