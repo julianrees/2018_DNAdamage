@@ -9,15 +9,21 @@ library(outliers)
 # biocLite()
 
 setwd('./')
-#---- Data import ----
-# Set 1 data, Control, High, Low, Set 2 data, same order
+#---- Data import from the listed folders ----
+folders <- c("Data/4h_gH2aX_BT549/", "Data/24h_gH2aX_BT549/")
+
+temp_rdata <- list()
 rdata <- list()
-rdata[[1]] <- c(read.csv("Data/4h_gH2aX_BT549/4h_gH2aX_BT549_S1 CTRL.csv")[,3])
-rdata[[2]] <- c(read.csv("Data/4h_gH2aX_BT549/4h_gH2aX_BT549_S1 HD.csv")[,3])
-rdata[[3]] <- c(read.csv("Data/4h_gH2aX_BT549/4h_gH2aX_BT549_S1 LD.csv")[,3])
-rdata[[4]] <- c(read.csv("Data/4h_gH2aX_BT549/4h_gH2aX_BT549_S2 CTRL.csv")[,3])
-rdata[[5]] <- c(read.csv("Data/4h_gH2aX_BT549/4h_gH2aX_BT549_S2 HD.csv")[,3])
-rdata[[6]] <- c(read.csv("Data/4h_gH2aX_BT549/4h_gH2aX_BT549_S2 LD.csv")[,3])
+dataset_name <- list()
+k = 0
+for (i in seq(length(folders))){
+  files <- dir(folders[i])
+  for (j in seq(length(files))){
+    rdata[[j+k]] <- c(read.csv(paste(folders[i], files[j], sep = ''))[,3])
+    dataset_name[[j+k]] <- files[j]
+  }
+  k = j*i
+}
 
 #---- Data processing ----
 logdata <- list()
@@ -28,8 +34,10 @@ for (i in seq(length(rdata))){
 }
 
 # make the average of the medians of the control data sets
+controls <- as.list(c(1,1,1,4,4,4,7,7,7,10,10,10,13,13,13))
+unique(controls)
 ctrl_abs_mean <- mean(c(logmedians[[1]], logmedians[[4]]))
-controls <- as.list(c(1,1,1,4,4,4))
+
 
 # adjust the data sets to the absolute mean using the median absolute deviation
 normdata <- list()
@@ -54,7 +62,7 @@ theme_update(plot.title = element_text(hjust = 0.5),
 
 dfs <- list()
 for (i in seq(length(normdata))){
-  dfs[[i]] <- data.frame(fl = normdata[[i]], set = i)
+  dfs[[i]] <- data.frame(fl = normdata[[i]], set = dataset_name[[i]])
 }
 
 ggplot(dfs[[1]], aes(fl)) + 
@@ -69,10 +77,10 @@ ggplot(dfs[[1]], aes(fl)) +
 
 # set the plotting options - alp is transparency, bw is the bandwidth multiplier
 alp = 0.2
-bw = 0.75
-ggplot(dfs[[1]], aes(fl)) + 
-  geom_density(aes(fill = 'Control'), alpha = alp, adjust = bw) + 
-  geom_density(data = dfs[[2]], aes(fl, fill = 'High Dose'), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[3]], aes(fl, fill = 'Low Dose'), alpha = alp,  adjust = bw)# +
+bw = 0.5
+ggplot(dfs[[7]], aes(fl)) + 
+  geom_density(aes(fill = set), alpha = alp, adjust = bw) + 
+  geom_density(data = dfs[[8]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
+  geom_density(data = dfs[[9]], aes(fl, fill = set), alpha = alp,  adjust = bw)# +
 #facet_grid(~ set)
 
