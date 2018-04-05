@@ -23,7 +23,7 @@ rdata[[6]] <- c(read.csv("Data/4h_gH2aX_BT549/4h_gH2aX_BT549_S2 LD.csv")[,3])
 logdata <- list()
 logmedians <- list()
 for (i in seq(length(rdata))){
-  logdata[[i]] <- signif(log(rdata[[i]]), digits = 4)
+  logdata[[i]] <- signif(log(rdata[[i]]), digits = 6)
   logmedians[[i]] <- median(logdata[[i]])
 }
 
@@ -46,14 +46,33 @@ for (i in seq(length(logdata))){
 
 
 #---- Plotting the data ----
+theme_set(theme_bw())
+theme_update(plot.title = element_text(hjust = 0.5),
+             panel.grid.major = element_blank(),
+             panel.grid.minor = element_blank())
+
 
 dfs <- list()
 for (i in seq(length(normdata))){
-  dfs[[i]] <- data.frame(fl = normdata[[i]])
+  dfs[[i]] <- data.frame(fl = normdata[[i]], set = i)
 }
 
-ggplot(dfs[[1]], aes(x = fl)) + 
-  geom_bar(aes(fill = 'Control')) + 
-  geom_bar(data = dfs[[2]], aes(x = fl, fill = 'High Dose')) + 
-  geom_bar(data = dfs[[3]], aes(x = fl, fill = 'Low Dose'))
+ggplot(dfs[[1]], aes(fl)) + 
+  geom_density(aes(fill = 'Control')) + 
+  geom_rug(aes(x = fl, y = 0), position = position_jitter(height = 0))
+
+ggplot(dfs[[1]], aes(fl)) + 
+  geom_histogram(aes(fill = 'Control'), binwidth = 0.002)
+
+ggplot(dfs[[1]], aes(fl)) + 
+  geom_freqpoly(aes(fill = 'Control'), binwidth = 0.005)
+
+# set the plotting options - alp is transparency, bw is the bandwidth multiplier
+alp = 0.2
+bw = 0.75
+ggplot(dfs[[1]], aes(fl)) + 
+  geom_density(aes(fill = 'Control'), alpha = alp, adjust = bw) + 
+  geom_density(data = dfs[[2]], aes(fl, fill = 'High Dose'), alpha = alp,  adjust = bw) +
+  geom_density(data = dfs[[3]], aes(fl, fill = 'Low Dose'), alpha = alp,  adjust = bw)# +
+#facet_grid(~ set)
 
