@@ -41,11 +41,21 @@ for (i in seq(length(rdata))){
 # NEED TO FIRST SPLIT BY CELL LINE, THEN BY TIME POINT FOR THE CONTROLS
 # COMPARE TREATMENTS TO CONTROLS, ALSO HAVE DIFFERENT TARGETS
 
-controls <- as.list(c(1,1,1,4,4,4,7,7,7,10,10,10,13,13,13))
-timepoints <- c(1,1,1,1,1,1,2,2,2,2,2,2,2,2,2)
+controls <- c(1,1,1,4,4,4,7,7,7,10,10,10,13,13,13)
+# timepoint 1 is 4 hrs, 2 is 24 hrs, 3 is 4_24, and 4 is 24_24
+timepoints <- c('4 hrs','24 hrs','4 hrs + 24 hrs','24 hrs + 24 hrs')
+timepoint <- c(1,1,1,1,1,1,2,2,2,2,2,2,2,2,2)
+# antibody 1 is gH2aX, 2 is ATF2
+antibodies <- c('gH2aX','ATF2')
+antibody <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)
+# cellline 1 is BT549, 2 is SKBR3
+celllines <- c('BT549','SKBR3')
+cellline <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)
+
+
+# select which controls to include in MAD via logical bit
 includecontrols <- c(1,1,1,0,0,0,1,1,1,1,1,1,0,0,0)
 includecontrols <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)
-
 
 
 normdata <- list()
@@ -55,9 +65,9 @@ ctrl_abs_mean <- array()
 normfactors <- array()
 
 # adjusts the datasets to the control absolute means for each time point. may need to do this differently
-for (j in seq(max(timepoints))){
+for (j in seq(max(timepoint))){
   ctrl_abs_mean[j] <- mean(as.numeric(logmedians[as.numeric(unique(controls[which(
-    timepoints == j & includecontrols == 1)]))]))
+    timepoint == j & includecontrols == 1)]))]))
   for (i in seq(length(logdata))){
     logmads[[i]] <- mad(logdata[[i]], constant = ctrl_abs_mean[j])
     maddata[[i]] <- logdata[[i]] - logmads[[controls[[i]]]]
