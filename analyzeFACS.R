@@ -133,8 +133,32 @@ theme_set(theme_bw())
 theme_update(plot.title = element_text(hjust = 0.5),
              panel.grid.major = element_blank(),
              panel.grid.minor = element_blank())
-alp = 0.4 # set transparency
+
+alp = 0.5 # set transparency
 bw = 0.5 # multiplier for bandwidth relative to defualt (SD)
+
+
+pfill = 'cell'
+pdf = dfs[[1]]
+  
+  
+ggplot(data = pdf, aes_string("fl", fill = pfill), alpha = alp, adjust = bw) + 
+  geom_density()
+
+
+tdf <- dfs[[1]]
+seq(2,length(dfs))
+for (i in seq(2,length(dfs))){
+  tdf <- rbind(tdf, dfs[[i]])
+}
+
+
+ggplot(tdf, aes(fl, fill = cell)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  #facet_wrap(~set)
+  facet_grid(timepoint ~ dose)
+
+
 
 # compare the control groups in log space and not normalized
 ggplot(log_dfs[[1]], aes(fl)) + 
@@ -408,3 +432,11 @@ ggplot(dfs[[1]], aes(fl)) +
   facet_grid(timepoint~dose) + 
   ggsave(filename = 'Figures/ATF2_dose_by_timepoint.pdf',
          width = 8.5, height = 5.5, units = "in")
+
+pdf = dfs
+pfill = 'cell'
+palpha = 0.5
+
+
+ggplot(data = dfs[[1]], aes_string("fl", fill = pfill), alpha = alp, adjust = bw) + 
+  geom_density()
