@@ -13,7 +13,13 @@ setwd('./')
 folders <- c("Data/pATF2/4h_BT549_ATF2/",
              "Data/pATF2/4h_24h_BT549_ATF2/",
              "Data/pATF2/4h_SKBR3_ATF2/",
-             "Data/pATF2/4h_24h_SKBR3_ATF2/")
+             "Data/pATF2/4h_24h_SKBR3_ATF2/",
+             "Data/pATF2/24h_BT549_ATF2/",
+             "Data/pATF2/24h_24h_BT549_ATF2/",
+             "Data/pATF2/24h_SKBR3_ATF2/",
+             "Data/pATF2/24h_24h_SKBR3_ATF2/")
+
+# read the directory contents in, populate raw data in the rdata, generate names in dataset_names
 temp_rdata <- list()
 rdata <- list()
 dataset_name <- list()
@@ -25,8 +31,44 @@ for (i in seq(length(folders))){
     dataset_name[[j+k]] <- files[j]
   }
   k = k + j
-  # NEED TO CHECK THIS
 }
+
+# split the filenames at the underscores, read the categorical info from the text strings into the following arrays
+timepoint <- array(dim = length(rdata))
+cellline <- array(dim = length(rdata))
+antibody <- array(dim = length(rdata))
+replicate <- array(dim = length(rdata))
+dose <- array(dim = length(rdata))
+control <- array(dim = length(rdata))
+
+for (i in seq(length(rdata))){
+  if (length(unlist(strsplit(dataset_name[[i]], split = "_"))) == 5){
+    timepoint[i] <- unlist(strsplit(dataset_name[[i]], split = "_"))[1]
+    cellline[i] <- unlist(strsplit(dataset_name[[i]], split = "_"))[2]
+    antibody[i] <- unlist(strsplit(dataset_name[[i]], split = "_"))[3]
+    replicate[i] <- unlist(strsplit(dataset_name[[i]], split = "_"))[4]
+    dose[i] <- unlist(strsplit(unlist(strsplit(dataset_name[[i]], split = c("_")))[5], "[.]"))
+  }
+  else {
+    timepoint[i] <- paste(unlist(strsplit(dataset_name[[i]], split = "_"))[1], 
+                      unlist(strsplit(dataset_name[[i]], split = "_"))[2])
+    cellline[i] <- unlist(strsplit(dataset_name[[i]], split = "_"))[3]
+    antibody[i] <- unlist(strsplit(dataset_name[[i]], split = "_"))[4]
+    replicate[i] <- unlist(strsplit(dataset_name[[i]], split = "_"))[5]
+    dose[i] <- unlist(strsplit(unlist(strsplit(dataset_name[[i]], split = c("_")))[6], "[.]"))
+  }
+}
+
+# create array for the control ids, assuming control is the first one in each replicate
+for (i in seq(length(rdata))){
+  if (dose[i] == "CTRL"){
+    j = i
+  }
+  control[i] <- j
+}
+
+# generate the array of "include" bits for the control groups
+includecontrol <- array(dim = length(rdata), 1)
 
 
 #---- Data processing ----
@@ -37,54 +79,26 @@ for (i in seq(length(rdata))){
   logmedians[[i]] <- median(logdata[[i]])
 }
 
-# make the average of the medians of the control data sets
-
-
-# NEED TO FIRST SPLIT BY CELL LINE, THEN BY TIME POINT FOR THE CONTROLS
-# COMPARE TREATMENTS TO CONTROLS, ALSO HAVE DIFFERENT TARGETS
-dataset_name
-
-controls <- c(1,1,1,4,4,4,7,7,7,10,10,10,13,13,13,16,16,16,19,19,19,
-              22,22,22,25,25,25,28,28,28,31,31,31,34,34,34)
-# timepoint 1 is 4 hrs, 2 is 24 hrs, 3 is 4_24, and 4 is 24_24
-timepoints <- c('4 hrs','4 hrs + 24 hrs', '24 hrs','24 hrs + 24 hrs')
-timepoint <- c(1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,
-               1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2)
-# antibody 1 is gH2aX, 2 is ATF2
-antibodies <- c('gH2aX','ATF2')
-antibody <- c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
-              2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2)
-# cellline 1 is BT549, 2 is SKBR3
-celllines <- c('BT549','SKBR3')
-cellline <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-              2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2)
-# dose 1 is control, 2 is high dose, 3 is low dose
-doses <- c('Control','High','Low')
-dose <- c(1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,
-          1,2,3,1,2,3,1,2,3,1,2,3,1,2,3)
-set <- c(1,1,1,2,2,2,3,3,3,1,1,1,2,2,2,3,3,3,1,1,1,
-         2,2,2,3,3,3,1,1,1,2,2,2,3,3,3)
-
-# select which controls to include in MAD via logical bit
-includecontrols <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-                     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)
-
 normdata <- list()
 logmads <- list()
 maddata <- list()
-ctrl_abs_mean <- matrix(nrow = max(timepoint), ncol = max(cellline))
+ctrl_abs_mean <- matrix(nrow = length(unique(timepoint)), ncol = length(unique(cellline)))
 normfactors <- array()
 
 # adjusts the datasets to the control absolute means for each time point. may need to do this differently
-for (j in seq(max(timepoint))){
-  for (k in seq(max(cellline))){
-    ctrl_abs_mean[j,k] <- mean(as.numeric(logmedians[as.numeric(unique(controls[which(
-      timepoint == j & includecontrols == 1 & antibody == 2 & cellline == k)]))]))
+for (j in seq(NROW(ctrl_abs_mean))){
+  for (k in seq(NCOL(ctrl_abs_mean))){
+    ctrl_abs_mean[j,k] <- mean(as.numeric(logmedians[as.numeric(unique(control[which(
+        timepoint == unique(timepoint)[j] & 
+        includecontrol == 1 & 
+        antibody == unique(antibody[2]) & 
+        cellline == unique(cellline)[k])]))]))
+    print(j)
   }
   for (i in seq(length(logdata))){
     logmads[[i]] <- mad(logdata[[i]], constant = ctrl_abs_mean[j,k])
-    maddata[[i]] <- logdata[[i]] - logmads[[controls[[i]]]]
-    normfactors[i] <- median(maddata[[controls[[i]]]])
+    maddata[[i]] <- logdata[[i]] - logmads[[control[[i]]]]
+    normfactors[i] <- median(maddata[[control[[i]]]])
     normdata[[i]] <- maddata[[i]] / normfactors[i]
   }
 }
@@ -98,33 +112,44 @@ mad_dfs <- list()
 dfs <- list()
 for (i in seq(length(maddata))){
   r_dfs[[i]] <- data.frame(fl = rdata[[i]], set = dataset_name[[i]], 
-                           antibody = antibodies[antibody[i]], 
-                           cell = celllines[cellline[i]],
-                           timepoint = timepoints[timepoint[i]],
-                           dose = doses[dose[i]],
-                           sets = set[i])
+                           antibody = antibody[i], 
+                           cellline = cellline[i],
+                           timepoint = timepoint[i],
+                           dose = dose[i],
+                           replicate = replicate[i])
   log_dfs[[i]] <- data.frame(fl = logdata[[i]], set = dataset_name[[i]], 
-                             antibody = antibodies[antibody[i]], 
-                             cell = celllines[cellline[i]],
-                             timepoint = timepoints[timepoint[i]],
-                             dose = doses[dose[i]],
-                             sets = set[i])
+                             antibody = antibody[i], 
+                             cellline = cellline[i],
+                             timepoint = timepoint[i],
+                             dose = dose[i],
+                             replicate = replicate[i])
   mad_dfs[[i]] <- data.frame(fl = maddata[[i]], set = dataset_name[[i]], 
-                             antibody = antibodies[antibody[i]], 
-                             cell = celllines[cellline[i]],
-                             timepoint = timepoints[timepoint[i]],
-                             dose = doses[dose[i]],
-                             sets = set[i])
+                             antibody = antibody[i], 
+                             cellline = cellline[i],
+                             timepoint = timepoint[i],
+                             dose = dose[i],
+                             replicate = replicate[i])
   dfs[[i]] <- data.frame(fl = normdata[[i]], set = dataset_name[[i]], 
-                         antibody = antibodies[antibody[i]], 
-                         cell = celllines[cellline[i]],
-                         timepoint = timepoints[timepoint[i]],
-                         dose = doses[dose[i]],
-                         sets = as.factor(set[i]))
+                         antibody = antibody[i], 
+                         cellline = cellline[i],
+                         timepoint = timepoint[i],
+                         dose = dose[i],
+                         replicate = replicate[i])
 }
 
+# generate "total" dataframes for each df
+tdf <- dfs[[1]]
+tr_df <- r_dfs[[1]]
+tlog_df <- log_dfs[[1]]
+tmad_df <- mad_dfs[[1]]
 
-#---- generate geometric means of data from corresponding sets ----
+for (i in seq(2,length(dfs))){
+  tdf <- rbind(tdf, dfs[[i]])
+  # tr_df <- rbind(tr_df, r_dfs[[i]])
+  # tlog_df <- rbind(tlog_df, log_dfs[[i]])
+  # tmad_df <- rbind(tmad_df, mad_dfs[[i]])
+}
+
 
 
 
@@ -137,26 +162,32 @@ theme_update(plot.title = element_text(hjust = 0.5),
 alp = 0.5 # set transparency
 bw = 0.5 # multiplier for bandwidth relative to defualt (SD)
 
-
-pfill = 'cell'
+pfill = 'cellline' # select the fill 
 pdf = dfs[[1]]
-  
   
 ggplot(data = pdf, aes_string("fl", fill = pfill), alpha = alp, adjust = bw) + 
   geom_density()
 
 
 tdf <- dfs[[1]]
-seq(2,length(dfs))
 for (i in seq(2,length(dfs))){
   tdf <- rbind(tdf, dfs[[i]])
 }
 
-
-ggplot(tdf, aes(fl, fill = cell)) +
+ggplot(tdf, aes(fl, fill = cellline, by = replicate)) +
   geom_density(alpha = alp,  adjust = bw) + 
-  #facet_wrap(~set)
-  facet_grid(timepoint ~ dose)
+  facet_grid(timepoint ~ dose) + 
+  geom_vline(xintercept = 1)
+
+alp = 0.8
+ggplot(tdf, aes(fl, fill = cellline)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) + 
+  geom_vline(xintercept = 1)
+
+
+
+
 
 
 
