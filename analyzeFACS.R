@@ -4,6 +4,10 @@ library(BiocInstaller)
 library(ggcyto)
 library(flowCore)
 library(outliers)
+library(fitdistrplus)
+library(clusterSim)
+library(dplyr)
+library(multcomp)
 
 # source("https://bioconductor.org/biocLite.R")
 # biocLite()
@@ -19,7 +23,7 @@ folders <- c("Data/pATF2/4h_BT549_ATF2/",
              "Data/pATF2/24h_SKBR3_ATF2/",
              "Data/pATF2/24h_24h_SKBR3_ATF2/")
 
-# read the directory contents in, populate raw data in the rdata, generate names in dataset_names
+# read the directory contents in, populate raw data into rdata, generate names in dataset_names
 temp_rdata <- list()
 rdata <- list()
 dataset_name <- list()
@@ -72,6 +76,7 @@ includecontrol <- array(dim = length(rdata), 1)
 
 
 #---- Data processing ----
+# take the logs of the data and the medians of the log data
 logdata <- list()
 logmedians <- list()
 for (i in seq(length(rdata))){
@@ -79,36 +84,22 @@ for (i in seq(length(rdata))){
   logmedians[[i]] <- median(logdata[[i]])
 }
 
+# normalize to 1 (or standardize) the data by taking 1 + (x - median(control set for x))/mad(control set for x)
 normdata <- list()
 logmads <- list()
 maddata <- list()
-ctrl_abs_mean <- matrix(nrow = length(unique(timepoint)), ncol = length(unique(cellline)))
 normfactors <- array()
 
-# adjusts the datasets to the control absolute means for each time point. may need to do this differently
-for (j in seq(NROW(ctrl_abs_mean))){
-  for (k in seq(NCOL(ctrl_abs_mean))){
-    ctrl_abs_mean[j,k] <- mean(as.numeric(logmedians[as.numeric(unique(control[which(
-        timepoint == unique(timepoint)[j] & 
-        includecontrol == 1 & 
-        antibody == unique(antibody[2]) & 
-        cellline == unique(cellline)[k])]))]))
-    print(j)
-  }
-  for (i in seq(length(logdata))){
-    logmads[[i]] <- mad(logdata[[i]], constant = ctrl_abs_mean[j,k])
-    maddata[[i]] <- logdata[[i]] - logmads[[control[[i]]]]
-    normfactors[i] <- median(maddata[[control[[i]]]])
-    normdata[[i]] <- maddata[[i]] / normfactors[i]
-  }
+for (i in seq(length(logdata))){
+  logmads[[i]] <- mad(logdata[[i]])
+  maddata[[i]] <- 1 + (logdata[[i]] - logmedians[[control[[i]]]])/logmads[[control[[i]]]]
+  normfactors[i] <- median(maddata[[control[[i]]]])
+  normdata[[i]] <- maddata[[i]]# / normfactors[i]
 }
 
-ctrl_abs_mean
-
-#---- Make the log, MAD and normalized dataframes for plotting ----
+#---- Make the log and normalized dataframes ----
 r_dfs <- list()
 log_dfs <- list()
-mad_dfs <- list()
 dfs <- list()
 for (i in seq(length(maddata))){
   r_dfs[[i]] <- data.frame(fl = rdata[[i]], set = dataset_name[[i]], 
@@ -118,12 +109,6 @@ for (i in seq(length(maddata))){
                            dose = dose[i],
                            replicate = replicate[i])
   log_dfs[[i]] <- data.frame(fl = logdata[[i]], set = dataset_name[[i]], 
-                             antibody = antibody[i], 
-                             cellline = cellline[i],
-                             timepoint = timepoint[i],
-                             dose = dose[i],
-                             replicate = replicate[i])
-  mad_dfs[[i]] <- data.frame(fl = maddata[[i]], set = dataset_name[[i]], 
                              antibody = antibody[i], 
                              cellline = cellline[i],
                              timepoint = timepoint[i],
@@ -141,14 +126,28 @@ for (i in seq(length(maddata))){
 tdf <- dfs[[1]]
 tr_df <- r_dfs[[1]]
 tlog_df <- log_dfs[[1]]
-tmad_df <- mad_dfs[[1]]
 
 for (i in seq(2,length(dfs))){
   tdf <- rbind(tdf, dfs[[i]])
-  # tr_df <- rbind(tr_df, r_dfs[[i]])
-  # tlog_df <- rbind(tlog_df, log_dfs[[i]])
-  # tmad_df <- rbind(tmad_df, mad_dfs[[i]])
+  tr_df <- rbind(tr_df, r_dfs[[i]])
+  tlog_df <- rbind(tlog_df, log_dfs[[i]])
 }
+
+#---- Statistical description and analysis ----
+indexer <- which(tdf$dose == "LD" &
+                   tdf$cellline == "SKBR3" &
+                   tdf$timepoint == "4h 24h")
+
+subdata <- tdf$fl[indexer]
+
+# distribution analysis
+plotdist(subdata, histo = TRUE, demp = TRUE)
+descdist(subdata, boot = 100)
+
+# ANOVA
+fit <- aov(fl ~ timepoint, data = tdf[which(tdf$dose == 'CTRL' & tdf$cellline == "BT549"),])
+summary(fit)
+summary(glht(fit, linfct=mcp(timepoint="Tukey")))
 
 
 
@@ -169,305 +168,74 @@ ggplot(data = pdf, aes_string("fl", fill = pfill), alpha = alp, adjust = bw) +
   geom_density()
 
 
-tdf <- dfs[[1]]
-for (i in seq(2,length(dfs))){
-  tdf <- rbind(tdf, dfs[[i]])
-}
+ggplot(tlog_df[which(tlog_df$dose == "CTRL"),], aes(fl, fill = cellline, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose)
 
-ggplot(tdf, aes(fl, fill = cellline, by = replicate)) +
+
+
+ggplot(tlog_df[indexer,], aes(fl, fill = cellline, by = replicate)) +
   geom_density(alpha = alp,  adjust = bw) + 
   facet_grid(timepoint ~ dose) + 
-  geom_vline(xintercept = 1)
+  geom_point(data = suberrorbars, aes(x = median, y = c(0.9,1,1.1)), inherit.aes = FALSE) + 
+  geom_errorbarh(data = suberrorbars, aes(x = median, 
+                                          xmin = median - mad, 
+                                          xmax = median + mad, 
+                                          height = 0.1,
+                                          y = c(0.9,1,1.1)), inherit.aes = FALSE)
 
-alp = 0.8
-ggplot(tdf, aes(fl, fill = cellline)) +
+
+
+# plot the grouped and individual control groups
+ggplot(tlog_df[which(tlog_df$dose == 'CTRL'), ], aes(fl, fill = cellline)) +
   geom_density(alpha = alp,  adjust = bw) + 
   facet_grid(timepoint ~ dose) + 
-  geom_vline(xintercept = 1)
+  geom_vline(xintercept = as.vector(ctrl_abs_mean))
 
+ggplot(tlog_df[which(tlog_df$dose == 'CTRL'), ], aes(fl, fill = cellline, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) + 
+  geom_vline(xintercept = as.vector(ctrl_abs_mean)) #+ 
+  # ggsave(filename = 'Figures/controls_logspace.pdf',
+  #        width = 8.5, height = 5.5, units = "in")
 
+ggplot(tmad_df[which(tmad_df$dose == 'CTRL'), ], aes(fl, fill = cellline, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) #+ 
+  # ggsave(filename = 'Figures/maddif_logspace.pdf',
+  #        width = 8.5, height = 5.5, units = "in")
 
-
-
-
-
-# compare the control groups in log space and not normalized
-ggplot(log_dfs[[1]], aes(fl)) + 
-  geom_density(aes(fill = set), alpha = alp, adjust = bw) + 
-  geom_density(data = log_dfs[[4]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = log_dfs[[7]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = log_dfs[[10]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = log_dfs[[13]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = log_dfs[[16]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = log_dfs[[19]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = log_dfs[[22]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = log_dfs[[25]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = log_dfs[[28]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = log_dfs[[31]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = log_dfs[[34]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_vline(xintercept = as.vector(ctrl_abs_mean), aes(color)) + 
-  facet_grid(cell ~ timepoint) + 
-  ggsave(filename = 'Figures/controls_logspace.pdf',
-                 width = 8.5, height = 5.5, units = "in")
-
-
-
-
-ggplot(mad_dfs[[1]], aes(fl)) + 
-  geom_density(aes(fill = set), alpha = alp, adjust = bw) + 
-  geom_density(data = mad_dfs[[4]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = mad_dfs[[7]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = mad_dfs[[10]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = mad_dfs[[13]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = mad_dfs[[16]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = mad_dfs[[19]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = mad_dfs[[22]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = mad_dfs[[25]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = mad_dfs[[28]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = mad_dfs[[31]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = mad_dfs[[34]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_vline(xintercept = unique(normfactors), aes(color)) + 
-  facet_grid(cell ~ timepoint) + 
-  ggsave(filename = 'Figures/maddif_logspace.pdf',
-         width = 8.5, height = 5.5, units = "in")
-
-
-ggplot(dfs[[1]], aes(fl)) + 
-  geom_density(aes(fill = set), alpha = alp, adjust = bw) + 
-  geom_density(data = dfs[[4]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[7]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[10]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[13]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[16]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[19]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[22]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[25]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[28]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[31]], aes(fl, fill = set), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[34]], aes(fl, fill = set), alpha = alp,  adjust = bw) +
+ggplot(tdf[which(tmad_df$dose == 'CTRL'), ], aes(fl, fill = cellline, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) + 
   geom_vline(xintercept = 1) + 
-  facet_grid(cell ~ timepoint) + 
   ggsave(filename = 'Figures/controls_normalized.pdf',
          width = 8.5, height = 5.5, units = "in")
 
-alp = 0.4
-ggplot(dfs[[1]], aes(fl)) + 
-  geom_density(aes(fill = sets), alpha = alp, adjust = bw) + 
-  geom_density(data = dfs[[2]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[3]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[4]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[5]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[6]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[7]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[8]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[9]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[10]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[11]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[12]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[13]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[14]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[15]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[16]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[17]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[18]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[19]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[20]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[21]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[22]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[23]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[24]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[25]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[26]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[27]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[28]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[29]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[30]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[31]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[32]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[33]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[34]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[35]], aes(fl, fill = sets), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[36]], aes(fl, fill = sets), alpha = alp,  adjust = bw) +
-  geom_vline(xintercept = 1) + 
-  facet_grid(dose~cell) +
-  ggsave(filename = 'Figures/ATF2_cell_by_dose2.pdf',
-         width = 8.5, height = 5.5, units = "in")
-
-ggplot(dfs[[1]], aes(fl)) + 
-  geom_density(aes(fill = dose), alpha = alp, adjust = bw) + 
-  geom_density(data = dfs[[2]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[3]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[4]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[5]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[6]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[7]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[8]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[9]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[10]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[11]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[12]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[13]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[14]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[15]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[16]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[17]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[18]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[19]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[20]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[21]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[22]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[23]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[24]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[25]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[26]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[27]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[28]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[29]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[30]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[31]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[32]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[33]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[34]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[35]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[36]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_vline(xintercept = 1) + 
-  facet_grid(sets~cell) + 
-  ggsave(filename = 'Figures/ATF2_cell_by_set.pdf',
-         width = 8.5, height = 5.5, units = "in")
 
 
-ggplot(dfs[[1]], aes(fl)) + 
-  geom_density(aes(fill = dose), alpha = alp, adjust = bw) + 
-  geom_density(data = dfs[[2]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[3]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[4]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[5]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[6]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[7]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[8]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[9]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[10]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[11]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[12]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[13]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[14]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[15]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[16]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[17]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[18]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[19]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[20]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[21]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[22]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[23]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[24]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[25]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[26]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[27]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[28]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[29]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[30]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[31]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[32]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[33]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[34]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[35]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[36]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_vline(xintercept = 1) + 
-  facet_grid(sets~cell) + 
-  ggsave(filename = 'Figures/ATF2_cell_by_set.pdf',
-         width = 8.5, height = 5.5, units = "in")
-
-
-ggplot(dfs[[1]], aes(fl)) + 
-  geom_density(aes(fill = dose), alpha = alp, adjust = bw) + 
-  geom_density(data = dfs[[2]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[3]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[4]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[5]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[6]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[7]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[8]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[9]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[10]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[11]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[12]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[13]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[14]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[15]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[16]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[17]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[18]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[19]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[20]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[21]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[22]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[23]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[24]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[25]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[26]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[27]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[28]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[29]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[30]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[31]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[32]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[33]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[34]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[35]], aes(fl, fill = dose), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[36]], aes(fl, fill = dose), alpha = alp,  adjust = bw) +
-  geom_vline(xintercept = 1) + 
-  facet_grid(timepoint~cell) + 
-  ggsave(filename = 'Figures/ATF2_cell_by_timepoint.pdf',
-         width = 8.5, height = 5.5, units = "in")
-
-alp = 0.6
-ggplot(dfs[[1]], aes(fl)) + 
-  geom_density(aes(fill = cell), alpha = alp, adjust = bw) + 
-  geom_density(data = dfs[[2]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[3]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[4]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[5]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[6]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[7]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[8]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[9]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[10]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[11]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[12]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[13]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[14]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[15]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[16]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[17]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[18]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[19]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[20]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[21]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[22]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[23]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[24]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[25]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[26]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[27]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[28]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[29]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[30]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[31]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[32]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[33]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[34]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_density(data = dfs[[35]], aes(fl, fill = cell), alpha = alp,  adjust = bw) + 
-  geom_density(data = dfs[[36]], aes(fl, fill = cell), alpha = alp,  adjust = bw) +
-  geom_vline(xintercept = 1) + 
-  facet_grid(timepoint~dose) + 
+ggplot(tdf, aes(fl, fill = cellline, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) +                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+  geom_vline(xintercept = 1) #+ 
   ggsave(filename = 'Figures/ATF2_dose_by_timepoint.pdf',
          width = 8.5, height = 5.5, units = "in")
+  
+ggplot(tdf, aes(fl, fill = cellline)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) + 
+  geom_vline(xintercept = 1) +
+  ggsave(filename = 'Figures/ATF2_dose_by_timepoint_averaged.pdf',
+       width = 8.5, height = 5.5, units = "in")
 
-pdf = dfs
-pfill = 'cell'
-palpha = 0.5
+ggplot(tdf, aes(x = dose, y = fl, fill = cellline)) + 
+  geom_boxplot(notch = TRUE, notchwidth = 0.25, outlier.color = NULL) + 
+  facet_grid(~timepoint) + 
+  geom_hline(yintercept = 1) +
+  scale_x_discrete(limits = levels(tdf$dose)[c(1,3,2)])
 
-
-ggplot(data = dfs[[1]], aes_string("fl", fill = pfill), alpha = alp, adjust = bw) + 
-  geom_density()
+ggplot(tdf[which(tdf$dose != "CTRL"),], aes(x = dose, y = fl, fill = cellline)) + 
+  geom_violin(adjust = bw) + 
+  facet_grid(~timepoint) + 
+  geom_hline(yintercept = 1) +
+  scale_x_discrete(limits = rev(levels(tdf$dose))[1:2])
