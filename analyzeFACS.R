@@ -14,9 +14,9 @@ library(multcomp)
 
 setwd('./')
 #---- Data import from the listed folders ----
-folders <- dir("Data/040718/")
+folders <- dir("Data/041218_case2/")
 for (i in seq(length(folders))){
-  folders[i] <- paste("Data/040718/", folders[i], '/', sep = "")
+  folders[i] <- paste("Data/041218_case2/", folders[i], '/', sep = "")
 }
 # folders <- c("Data/pATF2/4h_BT549_ATF2/",
 #              "Data/pATF2/4h_24h_BT549_ATF2/",
