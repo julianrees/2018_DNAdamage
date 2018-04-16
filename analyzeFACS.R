@@ -94,9 +94,8 @@ normfactors <- array()
 
 for (i in seq(length(logdata))){
   logmads[[i]] <- mad(logdata[[i]])
-  maddata[[i]] <- 1 + (logdata[[i]] - logmedians[[control[[i]]]])/logmads[[control[[i]]]]
-  normfactors[i] <- median(maddata[[control[[i]]]])
-  normdata[[i]] <- maddata[[i]]# / normfactors[i]
+  normdata[[i]] <- 1 + (logdata[[i]] - logmedians[[control[[i]]]])/logmads[[control[[i]]]]
+  normfactors[i] <- median(normdata[[control[[i]]]])
 }
 
 #---- Make the log and normalized dataframes ----
