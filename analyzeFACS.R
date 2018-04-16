@@ -264,10 +264,11 @@ ggplot(tdf, aes(x = cellline, y = fl, fill = dose)) +
   ggsave(filename = 'Figures/boxplot_celllines_timepoint_by_antibody_averaged.pdf',
          width = 8.5, height = 5.5, units = "in")
 
-ggplot(tdf[which(tdf$dose != "CTRL"),], aes(x = dose, y = fl, fill = cellline)) + 
+
+ggplot(tdf, aes(x = cellline, y = fl, fill = dose)) + 
   geom_violin(adjust = bw) + 
   facet_grid(antibody~timepoint) + 
   geom_hline(yintercept = 1) +
-  scale_x_discrete(limits = rev(levels(tdf$dose))[1:2]) + 
-  ggsave(filename = 'Figures/violin_doses_timepoint_by_antibody_averaged_nocontrol.pdf',
+  #scale_x_discrete(limits = rev(levels(tdf$dose))[1:2]) + 
+  ggsave(filename = 'Figures/violin_celllines_timepoint_by_antibody_averaged.pdf',
          width = 8.5, height = 5.5, units = "in")
