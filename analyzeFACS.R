@@ -14,9 +14,9 @@ library(multcomp)
 
 setwd('./')
 #---- Data import from the listed folders ----
-folders <- dir("Data/041218_case2/")
+folders <- dir("Data/072718/BL2_auc/")
 for (i in seq(length(folders))){
-  folders[i] <- paste("Data/041218_case2/", folders[i], '/', sep = "")
+  folders[i] <- paste("Data/072718/BL2_auc/", folders[i], '/', sep = "")
 }
 # folders <- c("Data/pATF2/4h_BT549_ATF2/",
 #              "Data/pATF2/4h_24h_BT549_ATF2/",
@@ -102,7 +102,7 @@ for (i in seq(length(logdata))){
 r_dfs <- list()
 log_dfs <- list()
 dfs <- list()
-for (i in seq(length(maddata))){
+for (i in seq(length(logdata))){
   r_dfs[[i]] <- data.frame(fl = rdata[[i]], set = dataset_name[[i]], 
                            antibody = antibody[i], 
                            cellline = cellline[i],
@@ -135,30 +135,30 @@ for (i in seq(2,length(dfs))){
 }
 
 #---- Statistical description and analysis ----
-indexer <- which(tdf$dose == "LD" &
-                   tdf$cellline == "SKBR3" &
-                   tdf$timepoint == "4h 24h")
+#indexer <- which(tdf$dose == "LD" &
+#                   tdf$cellline == "SKBR3" &
+ #                  tdf$timepoint == "4h 24h")
 
-subdata <- tdf$fl[indexer]
+#subdata <- tdf$fl[indexer]
 
 # distribution analysis
-plotdist(subdata, histo = TRUE, demp = TRUE)
-descdist(subdata, boot = 100)
+#plotdist(subdata, histo = TRUE, demp = TRUE)
+#descdist(subdata, boot = 100)
 
 # T-test
-t.test(x = tdf$fl[which(tdf$cellline == "BT549" &
-                          tdf$timepoint == "4h" &
-                          tdf$dose == "CTRL")], 
-       y = tdf$fl[which(tdf$cellline == "BT549" &
-                          tdf$timepoint == "4h" &
-                          tdf$dose == "LD")], 
-       conf.level = 0.95)
+#t.test(x = tdf$fl[which(tdf$cellline == "BT549" &
+#                          tdf$timepoint == "4h" &
+#                          tdf$dose == "CTRL")], 
+#       y = tdf$fl[which(tdf$cellline == "BT549" &
+##                          tdf$timepoint == "4h" &
+#                          tdf$dose == "LD")], 
+#       conf.level = 0.95)
 
 
 # ANOVA
-fit <- aov(fl ~ timepoint, data = tdf[which(tdf$dose == 'CTRL' & tdf$cellline == "BT549"),])
-summary(fit)
-summary(glht(fit, linfct=mcp(timepoint="Tukey")))
+#fit <- aov(fl ~ timepoint, data = tdf[which(tdf$dose == 'CTRL' & tdf$cellline == "BT549"),])
+#summary(fit)
+#summary(glht(fit, linfct=mcp(timepoint="Tukey")))
 
 
 #---- Plotting the data ----
@@ -170,8 +170,11 @@ theme_update(plot.title = element_text(hjust = 0.5),
 alp = 0.5 # set transparency
 bw = 0.5 # multiplier for bandwidth relative to defualt (SD)
 
-pfill = 'cellline' # select the fill 
+pfill = 'replicate' # select the fill 
 pdf = dfs[[1]]
+
+figprefix <- 'Figures/072718/BL2_auc/'
+
   
 # ggplot(data = pdf, aes_string("fl", fill = pfill), alpha = alp, adjust = bw) + 
 #   geom_density()
@@ -200,51 +203,52 @@ ggplot(tdf[which(tdf$dose == 'CTRL'), ], aes(fl, fill = cellline, by = replicate
   geom_density(alpha = alp,  adjust = bw) + 
   facet_grid(timepoint ~ antibody) + 
   geom_vline(xintercept = 1) + 
-  ggsave(filename = 'Figures/controls_normalized.pdf',
+  ggsave(filename = paste(figprefix, 'controls_normalized.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tdf[which(tdf$dose == 'CTRL'), ], aes(fl, fill = cellline)) +
   geom_density(alpha = alp,  adjust = bw) + 
   facet_grid(timepoint ~ antibody) + 
   geom_vline(xintercept = 1) + 
-  ggsave(filename = 'Figures/controls_normalized_grouped.pdf',
+  ggsave(filename = paste(figprefix,'controls_normalized_grouped.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tdf[which(tdf$antibody == "H2aX"),], aes(fl, fill = cellline, by = replicate)) +
   geom_density(alpha = alp,  adjust = bw) + 
   facet_grid(timepoint ~ dose) +                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
   geom_vline(xintercept = 1) +
-  ggsave(filename = 'Figures/H2aX_dose_by_timepoint.pdf',
+  #xlim(-8,10) +
+  ggsave(filename = paste(figprefix,'H2aX_dose_by_timepoint.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
   
-ggplot(tdf[which(tdf$antibody == "ATF2"),], aes(fl, fill = cellline, by = replicate)) +
-  geom_density(alpha = alp,  adjust = bw) + 
-  facet_grid(timepoint ~ dose) +                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
-  geom_vline(xintercept = 1) + 
-  ggsave(filename = 'Figures/ATF2_dose_by_timepoint.pdf',
-         width = 8.5, height = 5.5, units = "in")
+# ggplot(tdf[which(tdf$antibody == "ATF2"),], aes(fl, fill = cellline, by = replicate)) +
+#   geom_density(alpha = alp,  adjust = bw) + 
+#   facet_grid(timepoint ~ dose) +                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+#   geom_vline(xintercept = 1) + 
+#   ggsave(filename = paste(figprefix,'ATF2_dose_by_timepoint.pdf', sep = ""),
+#          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tdf[which(tdf$antibody == "H2aX"),], aes(fl, fill = cellline)) +
   geom_density(alpha = alp,  adjust = bw) + 
   facet_grid(timepoint ~ dose) +                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
   geom_vline(xintercept = 1) +
-  ggsave(filename = 'Figures/H2aX_dose_by_timepoint_averaged.pdf',
+  ggsave(filename = paste(figprefix,'H2aX_dose_by_timepoint_averaged.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
-ggplot(tdf[which(tdf$antibody == "ATF2"),], aes(fl, fill = cellline)) +
-  geom_density(alpha = alp,  adjust = bw) + 
-  facet_grid(timepoint ~ dose) +                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
-  geom_vline(xintercept = 1) + 
-  ggsave(filename = 'Figures/ATF2_dose_by_timepoint_averaged.pdf',
-         width = 8.5, height = 5.5, units = "in")
+# ggplot(tdf[which(tdf$antibody == "ATF2"),], aes(fl, fill = cellline)) +
+#   geom_density(alpha = alp,  adjust = bw) + 
+#   facet_grid(timepoint ~ dose) +                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+#   geom_vline(xintercept = 1) + 
+#   ggsave(filename = paste(figprefix,'ATF2_dose_by_timepoint_averaged.pdf', sep = ""),
+#          width = 8.5, height = 5.5, units = "in")
 
 
-ggplot(tdf, aes(x = dose, y = fl, fill = cellline, by = replicate)) + 
+ggplot(tdf, aes(x = dose, y = fl, fill = cellline, by = replicate, color = replicate)) + 
   geom_boxplot(notch = TRUE, notchwidth = 0.25, outlier.color = NULL, position = "dodge") + 
   facet_grid(antibody~timepoint) + 
   geom_hline(yintercept = 1) +
   scale_x_discrete(limits = levels(tdf$dose)[c(1,3,2)]) +
-  ggsave(filename = 'Figures/boxplot_doses_timepoint_by_antibody.pdf',
+  ggsave(filename = paste(figprefix, 'boxplot_doses_timepoint_by_antibody.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tdf, aes(x = dose, y = fl, fill = cellline)) + 
@@ -252,7 +256,7 @@ ggplot(tdf, aes(x = dose, y = fl, fill = cellline)) +
   facet_grid(antibody~timepoint) + 
   geom_hline(yintercept = 1) +
   scale_x_discrete(limits = levels(tdf$dose)[c(1,3,2)]) +
-  ggsave(filename = 'Figures/boxplot_doses_timepoint_by_antibody_averaged.pdf',
+  ggsave(filename = paste(figprefix, 'boxplot_doses_timepoint_by_antibody_averaged.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tdf, aes(x = cellline, y = fl, fill = dose)) + 
@@ -260,7 +264,7 @@ ggplot(tdf, aes(x = cellline, y = fl, fill = dose)) +
   facet_grid(antibody~timepoint) + 
   geom_hline(yintercept = 1) +
   # scale_x_discrete(limits = levels(tdf$dose)[c(1,3,2)]) +
-  ggsave(filename = 'Figures/boxplot_celllines_timepoint_by_antibody_averaged.pdf',
+  ggsave(filename = paste(figprefix, 'boxplot_celllines_timepoint_by_antibody_averaged.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 
@@ -269,5 +273,5 @@ ggplot(tdf, aes(x = cellline, y = fl, fill = dose)) +
   facet_grid(antibody~timepoint) + 
   geom_hline(yintercept = 1) +
   #scale_x_discrete(limits = rev(levels(tdf$dose))[1:2]) + 
-  ggsave(filename = 'Figures/violin_celllines_timepoint_by_antibody_averaged.pdf',
+  ggsave(filename = paste(figprefix, 'violin_celllines_timepoint_by_antibody_averaged.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
