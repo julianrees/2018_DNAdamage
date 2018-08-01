@@ -12,11 +12,13 @@ library(multcomp)
 # source("https://bioconductor.org/biocLite.R")
 # biocLite()
 
+#for dir in ./*; do (cd "$dir" && bulk_rename _S _B csv); done
+
 setwd('./')
 #---- Data import from the listed folders ----
-folders <- dir("Data/072718/BL2_tight/")
+folders <- dir("Data/merged_expts/")
 for (i in seq(length(folders))){
-  folders[i] <- paste("Data/072718/BL2_tight/", folders[i], '/', sep = "")
+  folders[i] <- paste("Data/merged_expts/", folders[i], '/', sep = "")
 }
 # folders <- c("Data/pATF2/4h_BT549_ATF2/",
 #              "Data/pATF2/4h_24h_BT549_ATF2/",
@@ -129,36 +131,85 @@ tr_df <- r_dfs[[1]]
 tlog_df <- log_dfs[[1]]
 
 for (i in seq(2,length(dfs))){
-  tdf <- rbind(tdf, dfs[[i]])
-  #tr_df <- rbind(tr_df, r_dfs[[i]])
+  #tdf <- rbind(tdf, dfs[[i]])
+  tr_df <- rbind(tr_df, r_dfs[[i]])
   #tlog_df <- rbind(tlog_df, log_dfs[[i]])
 }
 
 #---- Statistical description and analysis ----
 indexer <- which(tdf$dose == "CTRL" &
-                   tdf$cellline == "BT549" &
-                   tdf$timepoint == "4h" & 
-                   tdf$antibody == 'ATF2')
+                   tdf$cellline == "HCC" &
+                   tdf$timepoint == "24h" & 
+                   tdf$antibody == 'H2aX')
+indexer2 <- which(tdf$dose == "LD" &
+                    tdf$cellline == "SKBR3" &
+                    tdf$timepoint == "4h 24h" & 
+                    tdf$antibody == 'ATF2')
+
+
+disdata <- fitdist(tr_df$fl[indexer], 'lnorm')
+plot(disdata)
+
+densityplot(disdata$data)
+
+
+
+
+kruskal.test(fl ~ replicate, data = tr_df[indexer,])
+
+
+
+
+summary(tdf$replicate[indexer])
 
 subdata <- tdf$fl[indexer]
+subdata2 <- tdf$fl[indexer2]
 
 # distribution analysis
+qqnorm(subdata); qqline(subdata)
+#qqplot(subdata, 'pnorm')
 plotdist(subdata, histo = TRUE, demp = TRUE)
-descdist(subdata, boot = 100)
+descdist(ja3$data, boot = 100)
+
+ja <- fitdist(subdata, "norm")
+ja2 <- fitdist(subdata2, "norm")
+ja3 <- fitdist(tr_df$fl[indexer], 'lnorm')
+denscomp(ja3)
+cdfcomp(ja3)
+
+plot(ja3)
+
+gofstat(ja3, fitnames = "norm")
+
+
+# Kolmogorov-Smirnov test for normality (D closer to 0 is more normal)
+plot(ecdf(ja3$data))
+ks.test(unique(ja3$data), 'pnorm')
+ks.test(unique(ja3$data), unique(subdata2))
+
+
+# Wilcoxon Rank Sum Test
+wilcox.test(subdata, subdata2)
+kruskal.test(fl ~ dose, data = tdf[indexer,])
+
+
+str(subdata)
 
 # T-test
-#t.test(x = tdf$fl[which(tdf$cellline == "BT549" &
-#                          tdf$timepoint == "4h" &
-#                          tdf$dose == "CTRL")], 
-#       y = tdf$fl[which(tdf$cellline == "BT549" &
-##                          tdf$timepoint == "4h" &
-#                          tdf$dose == "LD")], 
-#       conf.level = 0.95)
 
+t.test(x = tdf$fl[which(tdf$dose == "HD" &
+                    tdf$cellline == "HCC" &
+                    tdf$timepoint == "24h" & 
+                    tdf$antibody == 'H2aX')],
+       y = tdf$fl[which(tdf$dose == "LD" &
+                          tdf$cellline == "HCC" &
+                          tdf$timepoint == "24h" & 
+                          tdf$antibody == 'H2aX')],
+       conf.level = 0.95)
 
 # ANOVA
 
-fit_input <- tdf[which(tdf$antibody == 'ATF2' & tdf$dose == 'CTRL'),]
+fit_input <- tr_df[indexer,]
 
 
 #fit <- aov(fl ~ timepoint, data = tdf[which(tdf$dose == 'CTRL' & tdf$cellline == "BT549"),])
@@ -181,9 +232,93 @@ bw = 0.5 # multiplier for bandwidth relative to defualt (SD)
 pfill = 'replicate' # select the fill 
 pdf = dfs[[1]]
 
-figprefix <- 'Figures/073018/BL2_tight/'
+figprefix <- 'Figures/merged_expts/'
 
-  
+
+ggplot(tr_df[which(tr_df$dose == 'CTRL' & tr_df$antibody == 'ATF2'), ], aes(fl, fill = replicate, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ cellline) + 
+  ggsave(filename = paste(figprefix, 'raw_controls_ATF2.pdf', sep = ""),
+         width = 8.5, height = 5.5, units = "in")
+
+ggplot(tr_df[which(tr_df$dose == 'CTRL' & tr_df$antibody == 'H2aX'), ], aes(fl, fill = replicate, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ cellline) + 
+  xlim(4e4,3e5) + 
+  ggsave(filename = paste(figprefix, 'raw_controls_H2aX.pdf', sep = ""),
+         width = 8.5, height = 5.5, units = "in")
+
+
+ggplot(tr_df[which(tr_df$antibody == 'ATF2' & tr_df$cellline == 'BT549'), ], aes(fl, fill = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) + 
+  ggsave(filename = paste(figprefix, 'raw_BT549_ATF2.pdf', sep = ""),
+         width = 8.5, height = 5.5, units = "in")
+
+ggplot(tr_df[which(tr_df$antibody == 'H2aX' & tr_df$cellline == 'BT549'), ], aes(fl, fill = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) + 
+  ggsave(filename = paste(figprefix, 'raw_BT549_H2aX.pdf', sep = ""),
+         width = 8.5, height = 5.5, units = "in")
+
+
+ggplot(tr_df[which(tr_df$antibody == 'ATF2' & tr_df$cellline == 'SKBR3'), ], aes(fl, fill = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) + 
+  ggsave(filename = paste(figprefix, 'raw_SKBR3_ATF2.pdf', sep = ""),
+         width = 8.5, height = 5.5, units = "in")
+
+ggplot(tr_df[which(tr_df$antibody == 'H2aX' & tr_df$cellline == 'SKBR3'), ], aes(fl, fill = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) + 
+  ggsave(filename = paste(figprefix, 'raw_SKBR3_H2aX.pdf', sep = ""),
+         width = 8.5, height = 5.5, units = "in")
+
+ggplot(tr_df[which(tr_df$antibody == 'ATF2' & tr_df$cellline == 'HCC'), ], aes(fl, fill = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) + 
+  ggsave(filename = paste(figprefix, 'raw_HCC_ATF2.pdf', sep = ""),
+         width = 8.5, height = 5.5, units = "in")
+
+ggplot(tr_df[which(tr_df$antibody == 'H2aX' & tr_df$cellline == 'HCC'), ], aes(fl, fill = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ dose) + 
+  xlim(4e4,3e5)
+  ggsave(filename = paste(figprefix, 'raw_HCC_H2aX.pdf', sep = ""),
+         width = 8.5, height = 5.5, units = "in")
+
+
+
+ggplot(tr_df[which(tr_df$dose == 'LD' & tr_df$antibody == 'ATF2'), ], aes(fl, fill = replicate, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ cellline)
+
+ggplot(tr_df[which(tr_df$dose == 'LD' & tr_df$antibody == 'H2aX'), ], aes(fl, fill = replicate, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ cellline) + 
+  xlim(4e4,1.7e5)
+
+
+
+ggplot(tr_df[which(tr_df$dose == 'HD' & tr_df$antibody == 'ATF2'), ], aes(fl, fill = replicate, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ cellline)
+
+ggplot(tr_df[which(tr_df$dose == 'HD' & tr_df$antibody == 'H2aX'), ], aes(fl, fill = replicate, by = replicate)) +
+  geom_density(alpha = alp,  adjust = bw) + 
+  facet_grid(timepoint ~ cellline) + 
+  xlim(4e4,1.7e5)
+
+
+
+
+
+
+
+
+
+
+
 # ggplot(data = pdf, aes_string("fl", fill = pfill), alpha = alp, adjust = bw) + 
 #   geom_density()
 # 
