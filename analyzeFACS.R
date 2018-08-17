@@ -27,8 +27,25 @@ abcellplot <- function(Vab, Vcell) {
                linetype = 2) +
     geom_vline(aes(xintercept = mean-sd), log_ctrl_means[which(log_ctrl_means$cellline == Vcell &
                                                                  log_ctrl_means$antibody == Vab),],
-               linetype = 2)
+               linetype = 2) + 
+    ggtitle(paste(Vab, Vcell))
 }
+
+tabcellplot <- function(Vab, Vcell) {
+  ggplot(tdf[which(tdf$antibody == Vab & tdf$cellline == Vcell), ], aes(fl, fill = replicate, by = replicate)) +
+    geom_density(alpha = alp,  adjust = bw) +
+    facet_grid(timepoint ~ dose) +
+    geom_vline(aes(xintercept = mean), ctrl_means[which(ctrl_means$cellline == Vcell &
+                                                              ctrl_means$antibody == Vab),]) +
+    geom_vline(aes(xintercept = mean+sd), ctrl_means[which(ctrl_means$cellline == Vcell &
+                                                                 ctrl_means$antibody == Vab),],
+               linetype = 2) +
+    geom_vline(aes(xintercept = mean-sd), ctrl_means[which(ctrl_means$cellline == Vcell &
+                                                                 ctrl_means$antibody == Vab),],
+               linetype = 2) + 
+    ggtitle(paste(Vab, Vcell))
+}
+
 
 # plotting preferences
 theme_set(theme_bw())
@@ -212,10 +229,25 @@ ggplot(runs, aes(sd)) +
 
 # bulk removal of sets 
 setremovals <- matrix(nrow = 0, ncol = 4)
+setremovals <- rbind(setremovals, c('H2aX','SKBR3','24h 24h','T'))
 setremovals <- rbind(setremovals, c('H2aX','SKBR3','24h','T'))
-setremovals <- rbind(setremovals, c('ATF2','SKBR3','24h','T'))
+setremovals <- rbind(setremovals, c('H2aX','SKBR3','4h 24h','T'))
+setremovals <- rbind(setremovals, c('H2aX','SKBR3','4h','U'))
 
-for (r in seq(nrow(removals))){
+setremovals <- rbind(setremovals, c('ATF2','SKBR3','24h','T'))
+setremovals <- rbind(setremovals, c('ATF2','SKBR3','4h 24h','T'))
+
+setremovals <- rbind(setremovals, c('H2aX','BT549','24h 24h','T'))
+setremovals <- rbind(setremovals, c('H2aX','BT549','4h','T')) # SD among control means much higher than T
+
+sd(runs[which(runs$antibody == 'H2aX' &
+        runs$cellline == 'SKBR3' & 
+        runs$timepoint == '4h' &
+        runs$dose == 'CTRL' &
+        runs$experiment == 'T'),7])
+
+
+for (r in seq(nrow(setremovals))){
   tlog_df <- tlog_df[-which(tlog_df$antibody == setremovals[r,1] &
                               tlog_df$cellline == setremovals[r,2] &
                               tlog_df$timepoint == setremovals[r,3] &
@@ -223,14 +255,13 @@ for (r in seq(nrow(removals))){
 }
 
 
-
-
 # build a table of runs to remove, based on e.g. cell count, SD
 removals <- matrix(nrow = 0, ncol = 5)
-# removals <- rbind(removals, c('H2aX','SKBR3','4h','U3','CTRL')) # only one data point in this set
-# removals <- rbind(removals, c('ATF2','HCC','24h','T3','HD')) # SD over .5
-# removals <- rbind(removals, c('ATF2','BT549','4h','S2','HD')) # SD over .5
-# removals <- rbind(removals, c('ATF2','BT549','4h','S2','LD')) # SD over .5
+removals <- rbind(removals, c('ATF2','HCC','24h','T3','HD')) # SD over .5
+removals <- rbind(removals, c('ATF2','BT549','4h','S2','HD')) # SD over .5
+removals <- rbind(removals, c('ATF2','BT549','4h','S2','LD')) # SD over .5
+removals <- rbind(removals, c('H2aX','SKBR3','4h 24h','U3','HD')) # not a normal distrubtion
+removals <- rbind(removals, c('H2aX','BT549','4h','U4','CTRL')) # very low cell count
 
 #removals <- rbind(removals, c('H2aX','SKBR3','4h','U2','CTRL'))
 #removals <- rbind(removals, c('ATF2','HCC','24h','S1','HD'))
@@ -263,6 +294,7 @@ pAb = 'H2aX'
 pcell = 'SKBR3'
 
 abcellplot(pAb, pcell)
+tabcellplot(pAb, pcell)
 
 ## SKBR3 + ATF2 + 4h + Experiment T has a systematic shift. Correcting it, keeping variance within set.
 ## BT549 + ATF2 + 4h + Experiment S has a systematic shift. Will correct it too.
@@ -330,11 +362,34 @@ abcellplot(fixAb, fixCell)
 mean(tlog_df$fl[which(tlog_df$antibody == 'ATF2' & tlog_df$dose == 'CTRL' &
                         tlog_df$experiment == 'U')])
 
+
+
+
 # still need to debug this part, but will normalize data based on control groups
-runs_norms <- merge(runs, log_mean_mean[which(log_mean_mean$dose == "CTRL"),], by = c('timepoint',
-                                                                                      'antibody'))
-colnames(runs_norms)[6] <- 'dose'
-colnames(runs_norms)[9:10] <- c('normfactor','normfacSD')
+
+norms <- merge(tlog_df, ddply(runs[which(runs$dose == 'CTRL'),],
+                           .(antibody, cellline, timepoint, experiment), summarize,
+                           mean = round(mean(log.mean), 3),
+                           sd = round(sd(log.mean), 3)), by = c('antibody','cellline','timepoint','experiment'))
+
+tdf <- norms
+str(tdf)
+tdf$fl <- (norms$fl-norms$mean)+1
+
+norm_runs <- ddply(tdf, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
+                           log.mean = round(mean(fl), 3),
+                           sd = round(sd(fl), 3))
+ctrl_means <- ddply(norm_runs[which(runs$dose == 'CTRL'),],
+                        .(antibody, cellline, timepoint), summarize,
+                        mean = round(mean(log.mean), 3),
+                        sd = round(sd(log.mean), 3))
+
+
+tabcellplot(pAb, pcell)
+
+
+
+
 
 
 normdata <- list()
@@ -394,11 +449,11 @@ dixon.test(runs$log.mean[which(runs$antibody == 'ATF2' & runs$dose == 'CTRL')])
 
 # this part is totally not working right now, need to evaluate HOW to do stats testing
 # define the sample size n
-n = 5000
+n = 4000
 
-Dose = "CTRL"
+Dose = "HD"
 Cell = "SKBR3"
-Time = "24h 24h"
+Time = "4h 24h"
 Ab = "H2aX"
 
 
@@ -406,7 +461,7 @@ indexer <- which(tlog_df$dose == Dose &
                    tlog_df$cellline == Cell &
                    tlog_df$timepoint == Time &
                    tlog_df$antibody == Ab &
-                   tlog_df$replicate == 'S1')
+                   tlog_df$replicate == 'U3')
 
 ref_indexer <- which(tlog_df$dose == Dose &
                        tlog_df$cellline == Cell &
@@ -415,7 +470,7 @@ ref_indexer <- which(tlog_df$dose == Dose &
                      #                  & tlog_df$replicate == 'S1'
 )
 
-fitdata <- sample_n(tlog_df[indexer,], n)
+fitdata <- sample_n(tlog_df[indexer,], n, replace = TRUE)
 refdata <- sample_n(tlog_df[ref_indexer,], n)
 
 disdata <- fitdist(fitdata$fl, 'norm')
@@ -424,7 +479,7 @@ plot(disdata)
 plot(refdisdata)
 
 # Kolmogorov-Smirnov test for normality (D closer to 0 is more normal / the same distribution)
-ks.test(unique(disdata$data), 'pnorm')
+ks.test(unique(refdisdata$data), 'pnorm')
 ks.test(unique(disdata$data), unique(refdisdata$data))
 
 #densityplot(fitdata$fl)
