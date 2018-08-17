@@ -29,7 +29,6 @@ abcellplot <- function(Vab, Vcell) {
                linetype = 2)
 }
 
-
 # plotting preferences
 theme_set(theme_bw())
 theme_update(plot.title = element_text(hjust = 0.5),
@@ -41,16 +40,11 @@ bw = 0.5 # multiplier for bandwidth relative to defualt (SD)
 
 pfill = 'replicate' # select the fill
 
-
-
-
-
-
-
-
+# command for bulk renaming within a directory
 #for dir in ./*; do (cd "$dir" && bulk_rename _S _B csv); done
 
 setwd('./')
+
 #---- Data import from the listed folders ----
 folders <- dir("Data/merged_expts//")
 for (i in seq(length(folders))){
@@ -105,8 +99,6 @@ for (i in seq(length(rdata))){
   control[i] <- j
 }
 
-# generate the array of "include" bits for the control groups
-
 #---- Data processing ----
 # take the logs of the data and the medians and means of the log data
 logdata <- list()
@@ -118,12 +110,11 @@ for (i in seq(length(rdata))){
   logmeans[[i]] <- mean(logdata[[i]])
 }
 
-
 # make the raw and log dataframes
 r_dfs <- list()
 log_dfs <- list()
 
-# make lists of individual data frams for the raw and log data
+# make lists of individual data frames for the raw and log data
 for (i in seq(length(logdata))){
   r_dfs[[i]] <- data.frame(fl = rdata[[i]], set = dataset_name[[i]],
                            antibody = antibody[i],
@@ -139,8 +130,6 @@ for (i in seq(length(logdata))){
                              replicate = replicate[i])
 }
 
-
-
 # generate "total" dataframes for the raw and log data
 tr_df <- r_dfs[[1]]
 tlog_df <- log_dfs[[1]]
@@ -151,9 +140,7 @@ for (i in seq(2,length(log_dfs))){
   
 }
 
-
 # Make a new factor column for the different experiments
-
 expts <- array(dim = nrow(tlog_df))
 
 sel = which(tlog_df$replicate == 'S1'
@@ -180,11 +167,13 @@ rm(expts)
 runs <- ddply(tlog_df, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
               log.mean = round(mean(fl), 3),
               sd = round(sd(fl), 3))
+
+# make a static table of original runs, including cell counts 
 runlength <- array()
 for (i in seq(1,length(logdata))){
   runlength[i] <- length(logdata[[i]])
 }
-runscounts <- cbind(runs, length = runlength)
+runscounts <- cbind(runs, cellcount = runlength)
 
 #---- Start looking at statistics and sets to toss ----
 
@@ -208,10 +197,9 @@ ggplot(runs, aes(sd)) +
   geom_density() +
   facet_grid(cellline~antibody)
 
-
 #---- SET REMOVAL ----
 
-#build a dataframe of sets to remove, either based on cell count or set SD
+# build a table of sets to remove, based on e.g. cell count, SD
 removals <- matrix(nrow = 0, ncol = 5)
 removals <- rbind(removals, c('H2aX','SKBR3','4h','U3','CTRL'))
 removals <- rbind(removals, c('ATF2','HCC','24h','T3','HD'))
@@ -219,16 +207,13 @@ removals <- rbind(removals, c('ATF2','BT549','4h','S2','HD'))
 removals <- rbind(removals, c('ATF2','BT549','4h','S2','LD'))
 removals <- rbind(removals, c('ATF2','BT549','24h 24h','S3','CTRL'))
 removals <- rbind(removals, c('H2aX','SKBR3','4h','U2','CTRL'))
-# less than 10,000 cells
 removals <- rbind(removals, c('ATF2','HCC','24h','S1','HD'))
 removals <- rbind(removals, c('ATF2','HCC','24h','S1','LD'))
 removals <- rbind(removals, c('ATF2','HCC','24h','S2','LD'))
 removals <- rbind(removals, c('H2aX','HCC','24h 24h','S1','CTRL'))
 removals <- rbind(removals, c('H2aX','HCC','24h 24h','S2','CTRL'))
 
-
 # remove sets from tlog_df, rebuild runs & log_ctrl_means
-
 for (r in seq(nrow(removals))){
   tlog_df <- tlog_df[-which(tlog_df$antibody == removals[r,1] &
                               tlog_df$cellline == removals[r,2] &
@@ -246,45 +231,10 @@ log_ctrl_means <- ddply(runs[which(runs$dose == 'CTRL'),],
                         mean = round(mean(log.mean), 3),
                         sd = round(sd(log.mean), 3))
 
-# ask for a summary of the means and standard deviations within each condition
-# for each experiment
-log_fl_means <- ddply(tlog_df, .(antibody, cellline, timepoint, dose, experiment), summarize,
-                      mean = round(mean(fl), 3),
-                      sd = round(sd(fl), 3))
-
-# pull the means and SDs by cellline and antibody of the controls for each timepoint
-log_mean_mean <- ddply(runs, .(antibody, cellline, timepoint, dose, experiment), summarize,
-                       mean = round(mean(log.mean), 3),
-                       sd = round(sd(log.mean), 3))
-
-# pull the means and SDs by cellline and antibody of the controls across all timepoints
-log_ctrl_means <- ddply(runs[which(runs$dose == 'CTRL'),],
-                        .(antibody, cellline, timepoint), summarize,
-                        mean = round(mean(log.mean), 3),
-                        sd = round(sd(log.mean), 3))
-
-# runs_norms <- merge(runs, log_ctrl_means, by = c('timepoint',
-#                                                  'antibody',
-#                                                  'cellline'))
-# colnames(runs_norms)[8:9] <- c('ctrl_mean','ctrl_sd')
-
-
-runs[which(runs$antibody == pAb & runs$cellline == pcell &
-             runs$dose == 'CTRL' &
-             runs$timepoint == '24h'),]
-
-
-which(log_fl_means$mean[which(log_fl_means$antibody == 'ATF2')] >
-        atf2_mean + atf2_sd)
-
-which(log_fl_means$mean[which(log_fl_means$antibody == 'H2aX')] >
-        h2ax_mean + h2ax_sd)
-
 # inspect the data for systematic shifts
 # plotting variables
 pAb = 'ATF2'
 pcell = 'HCC'
-
 
 abcellplot(pAb, pcell)
 
@@ -293,6 +243,7 @@ abcellplot(pAb, pcell)
 # HCC + ATF2 + 24h 24h / 4h / 4h 24h + Experiment S has a systematic shift.
 # SKBR3 + H2aX + 4h + Experiment T has a systematic shift.
 
+# build a table of sets with systematic shifts compared to others that should be corrected
 fixes <- matrix(nrow = 0, ncol = 4)
 fixes <- rbind(fixes, c('ATF2','SKBR3','4h','T'))
 fixes <- rbind(fixes, c('H2aX','SKBR3','4h','T')) # prob a cell count issue
@@ -304,7 +255,6 @@ fixes <- rbind(fixes, c('H2aX','HCC','4h','T'))
 fixes <- rbind(fixes, c('H2aX','HCC','24h','T'))
 fixes <- rbind(fixes, c('ATF2','HCC','24h 24h','T'))
 fixes <- rbind(fixes, c('ATF2','HCC','4h 24h','T'))
-
 
 for (i in seq(nrow(fixes))){
   fixAb = fixes[i,1]
@@ -334,8 +284,6 @@ for (i in seq(nrow(fixes))){
                        tlog_df$experiment == fixExp)] + fixFactor
 }
 
-
-
 runs <- ddply(tlog_df, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
               log.mean = round(mean(fl), 3),
               sd = round(sd(fl), 3))
@@ -345,13 +293,7 @@ log_ctrl_means <- ddply(runs[which(runs$dose == 'CTRL'),],
                         mean = round(mean(log.mean), 3),
                         sd = round(sd(log.mean), 3))
 
-# pull the means and SDs by cellline and antibody of the controls for each timepoint
-log_mean_mean <- ddply(runs, .(timepoint, antibody, cellline, dose, experiment), summarize,
-                       mean = round(mean(log.mean), 3),
-                       sd = round(sd(log.mean), 3))
-
 # check to make sure it worked by plotting
-
 abcellplot(fixAb, fixCell)
 
 
@@ -362,13 +304,7 @@ abcellplot(fixAb, fixCell)
 mean(tlog_df$fl[which(tlog_df$antibody == 'ATF2' & tlog_df$dose == 'CTRL' &
                         tlog_df$experiment == 'U')])
 
-
-
-
-
-
-
-
+# still need to debug this part, but will normalize data based on control groups 
 runs_norms <- merge(runs, log_mean_mean[which(log_mean_mean$dose == "CTRL"),], by = c('timepoint',
                                                                                       'antibody'))
 colnames(runs_norms)[6] <- 'dose'
@@ -380,8 +316,7 @@ for (i in seq(length(logdata))){
   normdata[[i]] <- 1 + logdata[[i]] - runs_norms$normfactor[[i]]
 }
 
-
-# make lists of individual data frams for the normalized data
+# make lists of individual data frames for the normalized data
 for (i in seq(length(logdata))){
   dfs[[i]] <- data.frame(fl = normdata[[i]], set = dataset_name[[i]],
                          antibody = antibody[i],
@@ -392,21 +327,10 @@ for (i in seq(length(logdata))){
                          experiment = expts2[i])
 }
 
-
-
-
-
-
-
 tdf <- dfs[[1]]
 for (i in seq(2,length(dfs))){
   tdf <- rbind(tdf, dfs[[i]])
-  #tr_df <- rbind(tr_df, r_dfs[[i]])
-  #tlog_df <- rbind(tlog_df, log_dfs[[i]])
 }
-
-
-
 
 
 # normalize to 1 (or standardize) the data by taking 1 + (x - median(control set for x))/mad(control set for x)
@@ -418,12 +342,6 @@ for (i in seq(2,length(dfs))){
 #   normdata[[i]] <- 1 + (logdata[[i]] - logmedians[[control[[i]]]])/logmads[[control[[i]]]]
 #   normfactors[i] <- median(normdata[[control[[i]]]])
 # }
-
-
-
-
-
-
 
 # need to remove sets which don't make sense here, before making means of them
 # calculate the mean and standard deviation of the means of alllllll data sets
@@ -446,13 +364,9 @@ atf2_ctrl_sd <- sd(runs$log.mean[which(runs$antibody == 'ATF2' & runs$dose == 'C
 dixon.test(runs$log.mean[which(runs$antibody == 'H2aX' & runs$dose == 'CTRL')])
 dixon.test(runs$log.mean[which(runs$antibody == 'ATF2' & runs$dose == 'CTRL')])
 
-
-
-
-
-
 #---- Statistical description and analysis ----
 
+# this part is totally not working right now, need to evaluate HOW to do stats testing
 # define the sample size n
 n = 5000
 
@@ -483,38 +397,19 @@ refdisdata <- fitdist(refdata$fl, 'norm')
 plot(disdata)
 plot(refdisdata)
 
-
 # Kolmogorov-Smirnov test for normality (D closer to 0 is more normal / the same distribution)
 ks.test(unique(disdata$data), 'pnorm')
 ks.test(unique(disdata$data), unique(refdisdata$data))
 
-
-
 #densityplot(fitdata$fl)
-
 #scores(disdata$data)
-
-
-
 #plot(ecdf(disdata$data))
-
-
-
-
-
-
 kruskal.test(fl ~ replicate, data = fitdata)
-
-
-
 #fit <- aov(fl ~ timepoint, data = tdf[which(tdf$dose == 'CTRL' & tdf$cellline == "BT549"),])
-
 fit <- aov(fl ~ replicate, data = fitdata)
 
 summary(fit)
 summary(glht(fit, linfct=mcp(replicate = "Tukey")))
-
-
 
 summary(tr_df$replicate[indexer])
 
@@ -537,17 +432,14 @@ plot(ja3)
 
 gofstat(ja3, fitnames = "norm")
 
-
 # Kolmogorov-Smirnov test for normality (D closer to 0 is more normal)
 plot(ecdf(disdata$data))
 ks.test(unique(disdata$data), 'pnorm')
 ks.test(unique(ja3$data), unique(subdata2))
 
-
 # Wilcoxon Rank Sum Test
 wilcox.test(subdata, subdata2)
 kruskal.test(fl ~ dose, data = tdf[indexer,])
-
 
 str(subdata)
 
@@ -565,19 +457,15 @@ t.test(x = tdf$fl[which(tdf$dose == "HD" &
 
 # ANOVA
 
-
-
 # ==== PLOT THE DATA ====
 
-pdf = dfs[[1]]
-
-figprefix <- 'Figures/merged_expts/'
-
 # ---- Plot the raw data ----
+figprefix <- 'Figures/merged_expts/raw/'
+
 ggplot(tr_df[which(tr_df$dose == 'CTRL' & tr_df$antibody == 'ATF2'), ], aes(fl, fill = replicate, by = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ cellline) +
-  ggsave(filename = paste(figprefix, 'raw_controls_ATF2.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'controls_ATF2.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tr_df[which(tr_df$dose == 'CTRL' & tr_df$antibody == 'H2aX'), ], aes(fl, fill = replicate, by = replicate)) +
@@ -585,46 +473,46 @@ ggplot(tr_df[which(tr_df$dose == 'CTRL' & tr_df$antibody == 'H2aX'), ], aes(fl, 
   facet_grid(timepoint ~ cellline) +
   xlim(4e4,3e5) +
   ggtitle("raw controls H2aX") +
-  ggsave(filename = paste(figprefix, 'raw_controls_H2aX.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'controls_H2aX.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 
 ggplot(tr_df[which(tr_df$antibody == 'ATF2' & tr_df$cellline == 'BT549'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'raw_BT549_ATF2.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'BT549_ATF2.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tr_df[which(tr_df$antibody == 'H2aX' & tr_df$cellline == 'BT549'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'raw_BT549_H2aX.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'BT549_H2aX.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 
 ggplot(tr_df[which(tr_df$antibody == 'ATF2' & tr_df$cellline == 'SKBR3'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'raw_SKBR3_ATF2.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'SKBR3_ATF2.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tr_df[which(tr_df$antibody == 'H2aX' & tr_df$cellline == 'SKBR3'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'raw_SKBR3_H2aX.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'SKBR3_H2aX.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tr_df[which(tr_df$antibody == 'ATF2' & tr_df$cellline == 'HCC'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'raw_HCC_ATF2.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'HCC_ATF2.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tr_df[which(tr_df$antibody == 'H2aX' & tr_df$cellline == 'HCC'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
   xlim(4e4,3e5)
-ggsave(filename = paste(figprefix, 'raw_HCC_H2aX.pdf', sep = ""),
+ggsave(filename = paste(figprefix, 'HCC_H2aX.pdf', sep = ""),
        width = 8.5, height = 5.5, units = "in")
 
 
@@ -652,10 +540,12 @@ ggplot(tr_df[which(tr_df$dose == 'HD' & tr_df$antibody == 'H2aX'), ], aes(fl, fi
 
 # ---- Plot the log data ----
 
+figprefix <- 'Figures/merged_expts/log/'
+
 ggplot(tlog_df[which(tlog_df$dose == 'CTRL' & tlog_df$antibody == 'ATF2'), ], aes(fl, fill = replicate, by = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ cellline) +
-  ggsave(filename = paste(figprefix, 'log_controls_ATF2.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'controls_ATF2.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 
@@ -664,45 +554,45 @@ ggplot(tlog_df[which(tlog_df$dose == 'CTRL' & tlog_df$antibody == 'H2aX'), ], ae
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ cellline) +
   ggtitle('log congrols H2aX') +
-  ggsave(filename = paste(figprefix, 'log_controls_H2aX.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'controls_H2aX.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 
 ggplot(tlog_df[which(tlog_df$antibody == 'ATF2' & tlog_df$cellline == 'BT549'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'log_BT549_ATF2.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'BT549_ATF2.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tlog_df[which(tlog_df$antibody == 'H2aX' & tlog_df$cellline == 'BT549'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'log_BT549_H2aX.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'BT549_H2aX.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 
 ggplot(tlog_df[which(tlog_df$antibody == 'ATF2' & tlog_df$cellline == 'SKBR3'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'log_SKBR3_ATF2.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'SKBR3_ATF2.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tlog_df[which(tlog_df$antibody == 'H2aX' & tlog_df$cellline == 'SKBR3'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'log_SKBR3_H2aX.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'SKBR3_H2aX.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tlog_df[which(tlog_df$antibody == 'ATF2' & tlog_df$cellline == 'HCC'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'log_HCC_ATF2.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'HCC_ATF2.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tlog_df[which(tlog_df$antibody == 'H2aX' & tlog_df$cellline == 'HCC'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'log_HCC_H2aX.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'HCC_H2aX.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 
