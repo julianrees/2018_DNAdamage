@@ -1,4 +1,5 @@
 #---- Header content ----
+## @knitr header
 library(ggplot2)
 library(BiocInstaller)
 library(ggcyto)
@@ -137,7 +138,7 @@ tlog_df <- log_dfs[[1]]
 for (i in seq(2,length(log_dfs))){
   #tr_df <- rbind(tr_df, r_dfs[[i]])
   tlog_df <- rbind(tlog_df, log_dfs[[i]])
-  
+
 }
 
 # Make a new factor column for the different experiments
@@ -168,7 +169,12 @@ runs <- ddply(tlog_df, .(antibody, cellline, timepoint, replicate, dose, experim
               log.mean = round(mean(fl), 3),
               sd = round(sd(fl), 3))
 
-# make a static table of original runs, including cell counts 
+log_ctrl_means <- ddply(runs[which(runs$dose == 'CTRL'),],
+                        .(antibody, cellline, timepoint), summarize,
+                        mean = round(mean(log.mean), 3),
+                        sd = round(sd(log.mean), 3))
+
+# make a static table of original runs, including cell counts
 runlength <- array()
 for (i in seq(1,length(logdata))){
   runlength[i] <- length(logdata[[i]])
@@ -180,12 +186,17 @@ runscounts <- cbind(runs, cellcount = runlength)
 # calculate the mean and SD of all distributions - which are outside of normal shape?
 mean(runs$sd)
 runs$sd
-
+## @knitr deviation_plots
 ggplot(runs, aes(x = antibody, y = sd)) +
   geom_boxplot(aes(fill = cellline))
 
-# plot_ly(runscounts, x = ~antibody, y = ~sd, 
-#         type = 'box', 
+ggplot(runs, aes(x = antibody, y = sd)) +
+  geom_jitter(aes(color = cellline)) +
+  facet_grid(~cellline)
+
+##
+# plot_ly(runscounts, x = ~antibody, y = ~sd,
+#         type = 'box',
 #         color = ~cellline)
 
 
@@ -199,19 +210,34 @@ ggplot(runs, aes(sd)) +
 
 #---- SET REMOVAL ----
 
-# build a table of sets to remove, based on e.g. cell count, SD
+# bulk removal of sets 
+setremovals <- matrix(nrow = 0, ncol = 4)
+setremovals <- rbind(setremovals, c('H2aX','SKBR3','24h','T'))
+setremovals <- rbind(setremovals, c('ATF2','SKBR3','24h','T'))
+
+for (r in seq(nrow(removals))){
+  tlog_df <- tlog_df[-which(tlog_df$antibody == setremovals[r,1] &
+                              tlog_df$cellline == setremovals[r,2] &
+                              tlog_df$timepoint == setremovals[r,3] &
+                              tlog_df$experiment == setremovals[r,4]),]
+}
+
+
+
+
+# build a table of runs to remove, based on e.g. cell count, SD
 removals <- matrix(nrow = 0, ncol = 5)
-removals <- rbind(removals, c('H2aX','SKBR3','4h','U3','CTRL'))
-removals <- rbind(removals, c('ATF2','HCC','24h','T3','HD'))
-removals <- rbind(removals, c('ATF2','BT549','4h','S2','HD'))
-removals <- rbind(removals, c('ATF2','BT549','4h','S2','LD'))
-removals <- rbind(removals, c('ATF2','BT549','24h 24h','S3','CTRL'))
-removals <- rbind(removals, c('H2aX','SKBR3','4h','U2','CTRL'))
-removals <- rbind(removals, c('ATF2','HCC','24h','S1','HD'))
-removals <- rbind(removals, c('ATF2','HCC','24h','S1','LD'))
-removals <- rbind(removals, c('ATF2','HCC','24h','S2','LD'))
-removals <- rbind(removals, c('H2aX','HCC','24h 24h','S1','CTRL'))
-removals <- rbind(removals, c('H2aX','HCC','24h 24h','S2','CTRL'))
+# removals <- rbind(removals, c('H2aX','SKBR3','4h','U3','CTRL')) # only one data point in this set
+# removals <- rbind(removals, c('ATF2','HCC','24h','T3','HD')) # SD over .5
+# removals <- rbind(removals, c('ATF2','BT549','4h','S2','HD')) # SD over .5
+# removals <- rbind(removals, c('ATF2','BT549','4h','S2','LD')) # SD over .5
+
+#removals <- rbind(removals, c('H2aX','SKBR3','4h','U2','CTRL'))
+#removals <- rbind(removals, c('ATF2','HCC','24h','S1','HD'))
+#removals <- rbind(removals, c('ATF2','HCC','24h','S1','LD'))
+#removals <- rbind(removals, c('ATF2','HCC','24h','S2','LD'))
+#removals <- rbind(removals, c('H2aX','HCC','24h 24h','S1','CTRL'))
+#removals <- rbind(removals, c('H2aX','HCC','24h 24h','S2','CTRL'))
 
 # remove sets from tlog_df, rebuild runs & log_ctrl_means
 for (r in seq(nrow(removals))){
@@ -233,8 +259,8 @@ log_ctrl_means <- ddply(runs[which(runs$dose == 'CTRL'),],
 
 # inspect the data for systematic shifts
 # plotting variables
-pAb = 'ATF2'
-pcell = 'HCC'
+pAb = 'H2aX'
+pcell = 'SKBR3'
 
 abcellplot(pAb, pcell)
 
@@ -261,7 +287,7 @@ for (i in seq(nrow(fixes))){
   fixCell = fixes[i,2]
   fixTime = fixes[i,3]
   fixExp = fixes[i,4]
-  
+
   goodmean <- mean(runs$log.mean[which(runs$cellline == fixCell &
                                          runs$antibody == fixAb &
                                          runs$timepoint == fixTime &
@@ -270,10 +296,10 @@ for (i in seq(nrow(fixes))){
                                         runs$antibody == fixAb &
                                         runs$timepoint == fixTime &
                                         runs$experiment == fixExp)])
-  
+
   # now need to fix tlog_df, runs, log_mean_means, log_ctrl_means,
   fixFactor = goodmean - setmean
-  
+
   tlog_df$fl[which(tlog_df$antibody == fixAb &
                      tlog_df$cellline == fixCell &
                      tlog_df$timepoint == fixTime &
@@ -304,7 +330,7 @@ abcellplot(fixAb, fixCell)
 mean(tlog_df$fl[which(tlog_df$antibody == 'ATF2' & tlog_df$dose == 'CTRL' &
                         tlog_df$experiment == 'U')])
 
-# still need to debug this part, but will normalize data based on control groups 
+# still need to debug this part, but will normalize data based on control groups
 runs_norms <- merge(runs, log_mean_mean[which(log_mean_mean$dose == "CTRL"),], by = c('timepoint',
                                                                                       'antibody'))
 colnames(runs_norms)[6] <- 'dose'
