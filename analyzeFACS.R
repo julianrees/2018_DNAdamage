@@ -290,11 +290,11 @@ log_ctrl_means <- ddply(runs[which(runs$dose == 'CTRL'),],
 
 # inspect the data for systematic shifts
 # plotting variables
-pAb = 'H2aX'
-pcell = 'SKBR3'
+pAb = 'ATF2'
+pcell = 'HCC'
 
 abcellplot(pAb, pcell)
-tabcellplot(pAb, pcell)
+
 
 ## SKBR3 + ATF2 + 4h + Experiment T has a systematic shift. Correcting it, keeping variance within set.
 ## BT549 + ATF2 + 4h + Experiment S has a systematic shift. Will correct it too.
@@ -305,14 +305,16 @@ tabcellplot(pAb, pcell)
 fixes <- matrix(nrow = 0, ncol = 4)
 fixes <- rbind(fixes, c('ATF2','SKBR3','4h','T'))
 fixes <- rbind(fixes, c('H2aX','SKBR3','4h','T')) # prob a cell count issue
-fixes <- rbind(fixes, c('H2aX','SKBR3','24h','T'))
-fixes <- rbind(fixes, c('H2aX','SKBR3','4h 24h','T'))
-fixes <- rbind(fixes, c('H2aX','SKBR3','24h 24h','T'))
-fixes <- rbind(fixes, c('ATF2','BT549','4h','S'))
-fixes <- rbind(fixes, c('H2aX','HCC','4h','T'))
-fixes <- rbind(fixes, c('H2aX','HCC','24h','T'))
-fixes <- rbind(fixes, c('ATF2','HCC','24h 24h','T'))
-fixes <- rbind(fixes, c('ATF2','HCC','4h 24h','T'))
+# fixes <- rbind(fixes, c('H2aX','SKBR3','24h','T'))
+# fixes <- rbind(fixes, c('H2aX','SKBR3','4h 24h','T'))
+# fixes <- rbind(fixes, c('H2aX','SKBR3','24h 24h','T'))
+# fixes <- rbind(fixes, c('ATF2','BT549','4h','S'))
+# fixes <- rbind(fixes, c('H2aX','HCC','4h','T'))
+# fixes <- rbind(fixes, c('H2aX','HCC','24h','T'))
+# fixes <- rbind(fixes, c('ATF2','HCC','24h 24h','T'))
+# fixes <- rbind(fixes, c('ATF2','HCC','4h 24h','T'))
+
+fixlog_df <- tlog_df
 
 for (i in seq(nrow(fixes))){
   fixAb = fixes[i,1]
@@ -332,7 +334,7 @@ for (i in seq(nrow(fixes))){
   # now need to fix tlog_df, runs, log_mean_means, log_ctrl_means,
   fixFactor = goodmean - setmean
 
-  tlog_df$fl[which(tlog_df$antibody == fixAb &
+  fixlog_df$fl[which(tlog_df$antibody == fixAb &
                      tlog_df$cellline == fixCell &
                      tlog_df$timepoint == fixTime &
                      tlog_df$experiment == fixExp)] <-
@@ -342,11 +344,11 @@ for (i in seq(nrow(fixes))){
                        tlog_df$experiment == fixExp)] + fixFactor
 }
 
-runs <- ddply(tlog_df, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
+fixruns <- ddply(tlog_df, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
               log.mean = round(mean(fl), 3),
               sd = round(sd(fl), 3))
 
-log_ctrl_means <- ddply(runs[which(runs$dose == 'CTRL'),],
+fixlog_ctrl_means <- ddply(runs[which(runs$dose == 'CTRL'),],
                         .(antibody, cellline, timepoint), summarize,
                         mean = round(mean(log.mean), 3),
                         sd = round(sd(log.mean), 3))
@@ -385,6 +387,8 @@ ctrl_means <- ddply(norm_runs[which(runs$dose == 'CTRL'),],
                         sd = round(sd(log.mean), 3))
 
 
+pAb = 'ATF2'
+pcell = 'BT549'
 tabcellplot(pAb, pcell)
 
 
