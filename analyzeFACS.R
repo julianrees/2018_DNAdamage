@@ -281,17 +281,19 @@ for (r in seq(nrow(removals))){
 
 runs <- ddply(tlog_df, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
               log.mean = round(mean(fl), 3),
+              log.median = round(median(fl),3),
               sd = round(sd(fl), 3))
 
 log_ctrl_means <- ddply(runs[which(runs$dose == 'CTRL'),],
                         .(antibody, cellline, timepoint), summarize,
                         mean = round(mean(log.mean), 3),
+                        median = round(mean(log.median),3),
                         sd = round(sd(log.mean), 3))
 
 # inspect the data for systematic shifts
 # plotting variables
-pAb = 'ATF2'
-pcell = 'HCC'
+pAb = 'H2aX'
+pcell = 'SKBR3'
 
 abcellplot(pAb, pcell)
 
@@ -372,11 +374,12 @@ mean(tlog_df$fl[which(tlog_df$antibody == 'ATF2' & tlog_df$dose == 'CTRL' &
 norms <- merge(tlog_df, ddply(runs[which(runs$dose == 'CTRL'),],
                            .(antibody, cellline, timepoint, experiment), summarize,
                            mean = round(mean(log.mean), 3),
+                           median = round(mean(log.median),3),
                            sd = round(sd(log.mean), 3)), by = c('antibody','cellline','timepoint','experiment'))
 
 tdf <- norms
 str(tdf)
-tdf$fl <- (norms$fl-norms$mean)+1
+tdf$fl <- (norms$fl-norms$median)+1
 
 norm_runs <- ddply(tdf, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
                            log.mean = round(mean(fl), 3),
@@ -388,7 +391,7 @@ ctrl_means <- ddply(norm_runs[which(runs$dose == 'CTRL'),],
 
 
 pAb = 'ATF2'
-pcell = 'BT549'
+pcell = 'SKBR3'
 tabcellplot(pAb, pcell)
 
 
@@ -730,6 +733,7 @@ ggplot(tdf[which(tdf$antibody == "H2aX"),], aes(fl, fill = cellline, by = replic
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
   geom_vline(xintercept = 1) +
+  ggtitle('H2aX') + 
   #xlim(-8,10) +
   ggsave(filename = paste(figprefix,'H2aX_dose_by_timepoint.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
@@ -756,7 +760,7 @@ ggplot(tdf[which(tdf$antibody == "ATF2"),], aes(fl, fill = cellline)) +
          width = 8.5, height = 5.5, units = "in")
 
 
-ggplot(tdf, aes(x = dose, y = fl, fill = cellline, by = replicate, color = replicate)) +
+ggplot(tdf, aes(x = dose, y = fl, fill = cellline, by = experiment, color = experiment)) +
   geom_boxplot(notch = TRUE, notchwidth = 0.25, outlier.color = NULL, position = "dodge") +
   facet_grid(antibody~timepoint) +
   geom_hline(yintercept = 1) +
@@ -794,3 +798,28 @@ ggplot(tdf, aes(x = cellline, y = fl, fill = dose)) +
   #scale_x_discrete(limits = rev(levels(tdf$dose))[1:2]) +
   ggsave(filename = paste(figprefix, 'violin_celllines_timepoint_by_antibody_averaged.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
+
+
+
+
+
+ggplot(tdf[which(tdf$cellline == "SKBR3"),], aes(x = dose, y = fl, fill = experiment)) +
+  geom_boxplot(notch = TRUE, notchwidth = 0.25, outlier.color = NULL, position = "dodge") +
+  facet_grid(antibody ~ timepoint) +
+  geom_hline(yintercept = 1)
+
+
+ggplot(tdf[which(tdf$cellline == "SKBR3"),], aes(x = replicate, y = fl, fill = dose)) +
+  geom_boxplot(notch = TRUE, notchwidth = 0.25, outlier.color = NULL, position = "dodge") +
+  facet_grid(antibody ~ timepoint) +
+  geom_hline(yintercept = 1)
+
+
+ggplot(skbr3counts, aes(x = replicate, y = cellcount)) + 
+  geom_col(position = 'dodge') + 
+  facet_grid(antibody~timepoint) + 
+  geom_hline(yintercept = 5000)
+
+
+
+
