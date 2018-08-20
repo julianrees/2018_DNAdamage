@@ -297,66 +297,18 @@ pcell = 'SKBR3'
 
 abcellplot(pAb, pcell)
 
+cellnumber = 3000
 
-## SKBR3 + ATF2 + 4h + Experiment T has a systematic shift. Correcting it, keeping variance within set.
-## BT549 + ATF2 + 4h + Experiment S has a systematic shift. Will correct it too.
-# HCC + ATF2 + 24h 24h / 4h / 4h 24h + Experiment S has a systematic shift.
-# SKBR3 + H2aX + 4h + Experiment T has a systematic shift.
+ggplot(counts[which(counts$cellline == 'BT549'),], aes(x = replicate, y = cellcount)) + 
+  geom_col(aes(fill = dose), position = 'dodge') + 
+  facet_grid(antibody~timepoint) + 
+  geom_hline(yintercept = cellnumber)
 
-# build a table of sets with systematic shifts compared to others that should be corrected
-fixes <- matrix(nrow = 0, ncol = 4)
-fixes <- rbind(fixes, c('ATF2','SKBR3','4h','T'))
-fixes <- rbind(fixes, c('H2aX','SKBR3','4h','T')) # prob a cell count issue
-# fixes <- rbind(fixes, c('H2aX','SKBR3','24h','T'))
-# fixes <- rbind(fixes, c('H2aX','SKBR3','4h 24h','T'))
-# fixes <- rbind(fixes, c('H2aX','SKBR3','24h 24h','T'))
-# fixes <- rbind(fixes, c('ATF2','BT549','4h','S'))
-# fixes <- rbind(fixes, c('H2aX','HCC','4h','T'))
-# fixes <- rbind(fixes, c('H2aX','HCC','24h','T'))
-# fixes <- rbind(fixes, c('ATF2','HCC','24h 24h','T'))
-# fixes <- rbind(fixes, c('ATF2','HCC','4h 24h','T'))
 
-fixlog_df <- tlog_df
 
-for (i in seq(nrow(fixes))){
-  fixAb = fixes[i,1]
-  fixCell = fixes[i,2]
-  fixTime = fixes[i,3]
-  fixExp = fixes[i,4]
 
-  goodmean <- mean(runs$log.mean[which(runs$cellline == fixCell &
-                                         runs$antibody == fixAb &
-                                         runs$timepoint == fixTime &
-                                         runs$experiment != fixExp)])
-  setmean <- mean(runs$log.mean[which(runs$cellline == fixCell &
-                                        runs$antibody == fixAb &
-                                        runs$timepoint == fixTime &
-                                        runs$experiment == fixExp)])
 
-  # now need to fix tlog_df, runs, log_mean_means, log_ctrl_means,
-  fixFactor = goodmean - setmean
 
-  fixlog_df$fl[which(tlog_df$antibody == fixAb &
-                     tlog_df$cellline == fixCell &
-                     tlog_df$timepoint == fixTime &
-                     tlog_df$experiment == fixExp)] <-
-    tlog_df$fl[which(tlog_df$antibody == fixAb &
-                       tlog_df$cellline == fixCell &
-                       tlog_df$timepoint == fixTime &
-                       tlog_df$experiment == fixExp)] + fixFactor
-}
-
-fixruns <- ddply(tlog_df, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
-              log.mean = round(mean(fl), 3),
-              sd = round(sd(fl), 3))
-
-fixlog_ctrl_means <- ddply(runs[which(runs$dose == 'CTRL'),],
-                        .(antibody, cellline, timepoint), summarize,
-                        mean = round(mean(log.mean), 3),
-                        sd = round(sd(log.mean), 3))
-
-# check to make sure it worked by plotting
-abcellplot(fixAb, fixCell)
 
 
 
@@ -395,30 +347,6 @@ pcell = 'SKBR3'
 tabcellplot(pAb, pcell)
 
 
-
-
-
-
-normdata <- list()
-for (i in seq(length(logdata))){
-  normdata[[i]] <- 1 + logdata[[i]] - runs_norms$normfactor[[i]]
-}
-
-# make lists of individual data frames for the normalized data
-for (i in seq(length(logdata))){
-  dfs[[i]] <- data.frame(fl = normdata[[i]], set = dataset_name[[i]],
-                         antibody = antibody[i],
-                         cellline = cellline[i],
-                         timepoint = timepoint[i],
-                         dose = dose[i],
-                         replicate = replicate[i],
-                         experiment = expts2[i])
-}
-
-tdf <- dfs[[1]]
-for (i in seq(2,length(dfs))){
-  tdf <- rbind(tdf, dfs[[i]])
-}
 
 
 # normalize to 1 (or standardize) the data by taking 1 + (x - median(control set for x))/mad(control set for x)
@@ -815,10 +743,7 @@ ggplot(tdf[which(tdf$cellline == "SKBR3"),], aes(x = replicate, y = fl, fill = d
   geom_hline(yintercept = 1)
 
 
-ggplot(skbr3counts, aes(x = replicate, y = cellcount)) + 
-  geom_col(position = 'dodge') + 
-  facet_grid(antibody~timepoint) + 
-  geom_hline(yintercept = 5000)
+
 
 
 
