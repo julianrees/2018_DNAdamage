@@ -134,7 +134,7 @@ for (i in seq(length(rdata))){
   control[i] <- j
 }
 
-#---- Data processing ----
+#---- Data cleanup ----
 # take the logs of the data and the medians and means of the log data
 logdata <- list()
 logmedians <- list()
@@ -221,38 +221,26 @@ runs <- merge(runs, runscounts, by = c('antibody',
                                        'dose',
                                        'experiment'))
 
-#---- Start looking at statistics and sets to toss ----
-
+#---- Data processing ----
 # calculate the mean and SD of all distributions - which are outside of normal shape?
 mean(runs$sd)
 runs$sd
-## @knitr deviation_plots
+## @knitr load_preprocessed
+load('Workspaces/180827_pre_processing.RData')
+
+#---
+
 ggplot(runs, aes(x = antibody, y = sd)) +
   geom_boxplot(aes(fill = cellline))
-
-
 
 ggplot(runs, aes(x = antibody, y = sd)) +
   geom_jitter(aes(color = cellline)) +
   facet_grid(~cellline)
 
-##
-# plot_ly(runscounts, x = ~antibody, y = ~sd,
-#         type = 'box',
-#         color = ~cellline)
-
-
-ggplot(runs, aes(sd)) +
-  geom_histogram() +
-  facet_grid(cellline~antibody)
-
-ggplot(runs, aes(sd)) +
-  geom_density() +
-  facet_grid(cellline~antibody)
 
 #---- SET REMOVAL ----
 
-# bulk removal of sets 
+# bulk removal of sets, based on larger standard deviations among sets
 setremovals <- matrix(nrow = 0, ncol = 4)
 setremovals <- rbind(setremovals, c('H2aX','SKBR3','24h 24h','T'))
 setremovals <- rbind(setremovals, c('H2aX','SKBR3','24h','T'))
@@ -294,6 +282,7 @@ removals <- removals[-1,]
 
 cellnumber = 4000
 removals <- rbind(removals, runs[which(runs$cellcount < cellnumber),1:5])
+dropped <- nrow(runs[which(runs$cellcount < cellnumber),1:5])
 
 for (r in seq(nrow(removals))){
   if (removals$replicate[r] != 'T4' & removals$replicate[r] != 'U4' & removals$dose[r] == 'CTRL') {
@@ -303,9 +292,7 @@ for (r in seq(nrow(removals))){
 }
 
 removals <- unique(removals)
-removals[which((removals$replicate == 'U4' | 
-                  removals$replicate == 'T4') & 
-                 removals$dose != 'CTRL'),]
+
 
 # remove sets from tlog_df, rebuild runs & log_ctrl_means
 for (r in seq(nrow(removals))){
@@ -350,7 +337,8 @@ trunc_log_means <- ddply(trunc_runs[which(trunc_runs$dose != 'CTRL'),],
                          mean = mean(log.mean), 
                          sd = sd(log.mean))
 
-plot(runs$log.mean[order(runs$log.mean)], trunc_runs$log.mean[order(trunc_runs$log.mean)])
+plot(runs$log.mean[order(runs$log.mean)], trunc_runs$log.mean[order(trunc_runs$log.mean)], 
+     main = 'Mean of 4000 Cells vs. Mean of Full Data')
 plot(runs$log.median[order(runs$log.median)], trunc_runs$log.median[order(trunc_runs$log.median)])
 plot(runs$sd[order(runs$sd)], trunc_runs$sd[order(trunc_runs$sd)])
 
@@ -360,7 +348,7 @@ plot(runs$sd[order(runs$sd)], trunc_runs$sd[order(trunc_runs$sd)])
 sd(norm_runs$log.mean[which(norm_runs$antibody == 'H2aX' & norm_runs$cellline == '' & norm_runs$dose != 'CTRL')])
 
 pAb = 'H2aX'
-pcell = 'SKBR3'
+pcell = 'HCC'
 conf = 1.5
 # abcellbox(pAb, pcell)
 
@@ -371,7 +359,7 @@ ggplot(trunc_log_data[which(trunc_log_data$cellline == pcell),], aes(x = replica
   geom_hline(aes(yintercept = mean+sd*conf), trunc_log_means[which(trunc_log_means$cellline == pcell),], 
              linetype = 2) + 
   geom_hline(aes(yintercept = mean-sd*conf), trunc_log_means[which(trunc_log_means$cellline == pcell),], 
-             linetype = 2)
+             linetype = 2) 
 
 
 
@@ -429,13 +417,23 @@ for (r in seq(nrow(removals2))){
                               trunc_norm_data$dose == as.character(removals2$dose[r])),]
 }
 
-# trunc_norm_runs <- ddply(trunc_norm_data, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
-#                          log.mean = round(mean(fl), 3),
-#                          log.median = round(median(fl),3),
-#                          sd = round(sd(fl), 3))
+trunc_norm_runs2 <- ddply(trunc_norm_data, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
+                         log.mean = round(mean(fl), 3),
+                         log.median = round(median(fl),3),
+                         sd = round(sd(fl), 3))
 
 
-pcell = 'BT549'
+
+
+ggplot(trunc_norm_runs[which(trunc_norm_runs$dose != 'CTRL'),], aes(x = cellline, y = norm.mean)) + 
+  geom_boxplot(aes(fill = antibody))
+
+
+
+
+
+
+pcell = 'HCC'
 pAb = 'ATF2'
 
 ggplot(trunc_norm_data[which(trunc_norm_data$cellline == pcell),], aes(x = replicate, y = fl, fill = dose)) +
@@ -445,7 +443,9 @@ ggplot(trunc_norm_data[which(trunc_norm_data$cellline == pcell),], aes(x = repli
   geom_hline(aes(yintercept = mean+sd*conf), trunc_norm_means[which(trunc_norm_means$cellline == pcell),], 
              linetype = 2) + 
   geom_hline(aes(yintercept = mean-sd*conf), trunc_norm_means[which(trunc_norm_means$cellline == pcell),], 
-             linetype = 2)
+              linetype = 2) #+ 
+  # ggsave(filename = paste(figprefix, 'normalized_boxplot_byset_HCC.pdf', sep = ""),
+  #        width = 8.5, height = 5.5, units = "in")
 
 
 ggplot(trunc_norm_data[which(trunc_norm_data$cellline == pcell),], aes(x = dose, y = fl, fill = dose)) +
@@ -457,8 +457,7 @@ ggplot(trunc_norm_data[which(trunc_norm_data$cellline == pcell),], aes(x = dose,
 ggplot(trunc_norm_data[which(trunc_norm_data$antibody == pAb),], aes(x = dose, y = fl, fill = dose)) +
   geom_boxplot(notch = TRUE, notchwidth = 0.25, outlier.color = NULL, position = "dodge") +
   facet_grid(cellline ~ timepoint) + 
-  geom_hline(yintercept = 1)
-
+  geom_hline(yintercept = 1) 
 
 
 
@@ -664,7 +663,7 @@ load("/Volumes/Seagate Backup Plus Drive/Projects/DNA Damage/FACS/R/Workspaces/1
 
 
 # ---- Plot the raw data ----
-figprefix <- 'Figures/merged_expts/raw/'
+figprefix <- 'Figures/josh/'
 
 ggplot(tr_df[which(tr_df$dose == 'CTRL' & tr_df$antibody == 'ATF2'), ], aes(fl, fill = replicate, by = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
@@ -765,7 +764,7 @@ ggplot(tlog_df[which(tlog_df$dose == 'CTRL' & tlog_df$antibody == 'H2aX'), ], ae
 ggplot(tlog_df[which(tlog_df$antibody == 'ATF2' & tlog_df$cellline == 'BT549'), ], aes(fl, fill = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +
   facet_grid(timepoint ~ dose) +
-  ggsave(filename = paste(figprefix, 'BT549_ATF2.pdf', sep = ""),
+  ggsave(filename = paste(figprefix, 'BT549_ATF2_bimodal.pdf', sep = ""),
          width = 8.5, height = 5.5, units = "in")
 
 ggplot(tlog_df[which(tlog_df$antibody == 'H2aX' & tlog_df$cellline == 'BT549'), ], aes(fl, fill = replicate)) +
