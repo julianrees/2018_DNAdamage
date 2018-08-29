@@ -11,6 +11,7 @@ library(dplyr)
 library(plyr)
 library(multcomp)
 library(plotly)
+library(lme)
 
 # source("https://bioconductor.org/biocLite.R")
 # biocLite()
@@ -348,7 +349,7 @@ plot(runs$sd[order(runs$sd)], trunc_runs$sd[order(trunc_runs$sd)])
 sd(norm_runs$log.mean[which(norm_runs$antibody == 'H2aX' & norm_runs$cellline == '' & norm_runs$dose != 'CTRL')])
 
 pAb = 'H2aX'
-pcell = 'HCC'
+pcell = 'BT549'
 conf = 1.5
 # abcellbox(pAb, pcell)
 
@@ -460,7 +461,10 @@ ggplot(trunc_norm_data[which(trunc_norm_data$antibody == pAb),], aes(x = dose, y
   geom_hline(yintercept = 1) 
 
 
-
+ggplot(trunc_norm_data[which(trunc_norm_data$antibody == pAb),], aes(x = dose, y = fl, fill = dose)) +
+  geom_violin(outlier.color = NULL, position = "dodge") +
+  facet_grid(cellline ~ timepoint) + 
+  geom_hline(yintercept = 1) 
 
 
 
@@ -576,21 +580,20 @@ Time = "4h 24h"
 Ab = "H2aX"
 
 
-indexer <- which(tlog_df$dose == Dose &
-                   tlog_df$cellline == Cell &
-                   tlog_df$timepoint == Time &
-                   tlog_df$antibody == Ab &
-                   tlog_df$replicate == 'U3')
+indexer <- which(trunc_norm_data$dose == Dose &
+                   trunc_norm_data$cellline == Cell &
+                   trunc_norm_data$timepoint == Time &
+                   trunc_norm_data$antibody == Ab)
 
-ref_indexer <- which(tlog_df$dose == Dose &
-                       tlog_df$cellline == Cell &
-                       tlog_df$timepoint == Time &
-                       tlog_df$antibody == Ab
-                     #                  & tlog_df$replicate == 'S1'
+ref_indexer <- which(trunc_norm_data$dose == Dose &
+                       trunc_norm_data$cellline == Cell &
+                       trunc_norm_data$timepoint == Time &
+                       trunc_norm_data$antibody == Ab
+                     #                  & trunc_norm_data$replicate == 'S1'
 )
 
-fitdata <- sample_n(tlog_df[indexer,], n, replace = TRUE)
-refdata <- sample_n(tlog_df[ref_indexer,], n)
+fitdata <- sample_n(trunc_norm_data[indexer,], n, replace = TRUE)
+refdata <- sample_n(trunc_norm_data[ref_indexer,], n)
 
 disdata <- fitdist(fitdata$fl, 'norm')
 refdisdata <- fitdist(refdata$fl, 'norm')
@@ -645,17 +648,29 @@ str(subdata)
 
 # T-test
 
-t.test(x = tdf$fl[which(tdf$dose == "HD" &
-                          tdf$cellline == "HCC" &
-                          tdf$timepoint == "24h" &
-                          tdf$antibody == 'H2aX')],
-       y = tdf$fl[which(tdf$dose == "LD" &
-                          tdf$cellline == "HCC" &
-                          tdf$timepoint == "24h" &
-                          tdf$antibody == 'H2aX')],
+t.test(x = trunc_norm_data$fl[which(trunc_norm_data$dose == "HD" &
+                                      trunc_norm_data$cellline == "HCC" &
+                                      trunc_norm_data$timepoint == "24h" &
+                                      trunc_norm_data$antibody == 'H2aX')],
+       y = trunc_norm_data$fl[which(trunc_norm_data$dose == "LD" &
+                                      trunc_norm_data$cellline == "HCC" &
+                                      trunc_norm_data$timepoint == "24h" &
+                                      trunc_norm_data$antibody == 'H2aX')],
        conf.level = 0.95)
 
 # ANOVA
+
+ano_hcc_h2ax <- aov(data = norm_runs[which(norm_runs$antibody == 'ATF2' 
+                                                 & norm_runs$cellline == 'BT549' 
+                                           & norm_runs$timepoint == '4h 24h'),], 
+                    log.mean ~ dose)
+
+summary(glht(ano_hcc_h2ax, linfct=mcp(dose = "Dunnett")))
+
+
+
+
+
 
 # ==== PLOT THE DATA ====
 ## @knitr dataload 
