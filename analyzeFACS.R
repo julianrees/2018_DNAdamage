@@ -12,6 +12,8 @@ library(plyr)
 library(multcomp)
 library(plotly)
 library(lme)
+library(nlme)
+library(FSA)
 
 # source("https://bioconductor.org/biocLite.R")
 # biocLite()
@@ -271,17 +273,31 @@ runs <- merge(runs, runscounts, by = c('antibody',
                                        'dose',
                                        'experiment'))
 
+pcell = 'SKBR3'
+pAb = 'ATF2'
+
+ggplot(tlog_df[which(tlog_df$antibody == pAb),], aes(x = dose, y = fl, fill = dose, by = replicate)) +
+  geom_boxplot(notch = TRUE, notchwidth = 0.25, outlier.color = NULL, position = "dodge") +
+  facet_grid(cellline ~ timepoint)
+
+
+
+
+
+
+
+
 
 # build a table of runs to remove, based on e.g. cell count, SD
 removals <- runs[1,1:5]
 removals <- rbind(removals, c('ATF2','HCC','24h','T3','HD')) # SD over .5
 removals <- rbind(removals, c('ATF2','BT549','4h','S2','HD')) # SD over .5
 removals <- rbind(removals, c('ATF2','BT549','4h','S2','LD')) # SD over .5
-removals <- rbind(removals, c('H2aX','SKBR3','4h 24h','U3','HD')) # not a normal distrubtion
+#removals <- rbind(removals, c('H2aX','SKBR3','4h 24h','U3','HD')) # not a normal distrubtion
 #removals <- rbind(removals, c('H2aX','BT549','4h','U4','CTRL')) # very low cell count
 removals <- removals[-1,]
 
-cellnumber = 4000
+cellnumber = 2000
 removals <- rbind(removals, runs[which(runs$cellcount < cellnumber),1:5])
 dropped <- nrow(runs[which(runs$cellcount < cellnumber),1:5])
 
@@ -292,6 +308,7 @@ for (r in seq(nrow(removals))){
   }
 }
 
+removals <- rbind(removals, runs[which(runs$replicate == 'U4' | runs$replicate == 'T4'), 1:5])
 removals <- unique(removals)
 
 
@@ -308,6 +325,7 @@ runs <- ddply(tlog_df, .(antibody, cellline, timepoint, replicate, dose, experim
               log.mean = round(mean(fl), 3),
               log.median = round(median(fl),3),
               sd = round(sd(fl), 3))
+
 runs <- merge(runs, runscounts, by = c('antibody',
                                        'cellline',
                                        'timepoint',
@@ -338,11 +356,17 @@ trunc_log_means <- ddply(trunc_runs[which(trunc_runs$dose != 'CTRL'),],
                          mean = mean(log.mean), 
                          sd = sd(log.mean))
 
-plot(runs$log.mean[order(runs$log.mean)], trunc_runs$log.mean[order(trunc_runs$log.mean)], 
-     main = 'Mean of 4000 Cells vs. Mean of Full Data')
-plot(runs$log.median[order(runs$log.median)], trunc_runs$log.median[order(trunc_runs$log.median)])
-plot(runs$sd[order(runs$sd)], trunc_runs$sd[order(trunc_runs$sd)])
+plot(runs$log.mean[order(runs$log.mean)], trunc_runs$log.mean[order(trunc_runs$log.mean)])
+plot(runs$log.mean[order(runs$log.mean)], trunc_runs$log.mean[order(trunc_runs$log.mean)] - 
+       runs$log.mean[order(runs$log.mean)])
 
+plot(runs$log.median[order(runs$log.median)], trunc_runs$log.median[order(trunc_runs$log.median)])
+plot(runs$log.median[order(runs$log.median)], trunc_runs$log.median[order(trunc_runs$log.median)] - 
+       runs$log.median[order(runs$log.median)])
+
+
+plot(runs$sd[order(runs$sd)], trunc_runs$sd[order(trunc_runs$sd)])
+plot(runs$sd[order(runs$sd)], trunc_runs$sd[order(trunc_runs$sd)] - runs$sd[order(runs$sd)])
 
 
 
@@ -369,7 +393,7 @@ trunc_norm_data <- merge(trunc_log_data, ddply(trunc_runs[which(trunc_runs$dose 
                                            mean = round(mean(log.mean), 3),
                                            median = round(mean(log.median),3),
                                            sd = round(sd(log.mean), 3)), by = c('antibody','cellline','timepoint','replicate'))
-trunc_norm_data$fl <- (trunc_norm_data$fl-trunc_norm_data$mean)+1
+trunc_norm_data$fl <- (trunc_norm_data$fl-trunc_norm_data$median)+1
 
 trunc_norm_runs <- ddply(trunc_norm_data, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
                     log.mean = round(mean(fl), 3),
@@ -383,32 +407,32 @@ trunc_norm_ctrl_means <- ddply(trunc_norm_runs[which(runs$dose == 'CTRL'),],
 trunc_norm_means <- ddply(trunc_norm_runs[which(trunc_norm_runs$dose != 'CTRL'),], 
                          .(antibody, cellline), summarize, 
                          mean = mean(log.mean), 
+                         median = mean(log.median),
                          sd = sd(log.mean))
 
 pAb = 'H2aX'
-pcell = 'HCC'
+pcell = 'BT549'
 conf = 1.5
 # abcellbox(pAb, pcell)
 
 ggplot(trunc_norm_data[which(trunc_norm_data$cellline == pcell),], aes(x = replicate, y = fl, fill = dose)) +
   geom_boxplot(notch = TRUE, notchwidth = 0.25, outlier.color = NULL, position = "dodge") +
   facet_grid(antibody ~ timepoint) + 
-  geom_hline(aes(yintercept = mean), trunc_norm_means[which(trunc_norm_means$cellline == pcell),]) + 
-  geom_hline(aes(yintercept = mean+sd*conf), trunc_norm_means[which(trunc_norm_means$cellline == pcell),], 
+  geom_hline(aes(yintercept = median), trunc_norm_means[which(trunc_norm_means$cellline == pcell),]) + 
+  geom_hline(aes(yintercept = median+sd*conf), trunc_norm_means[which(trunc_norm_means$cellline == pcell),], 
              linetype = 2) + 
-  geom_hline(aes(yintercept = mean-sd*conf), trunc_norm_means[which(trunc_norm_means$cellline == pcell),], 
+  geom_hline(aes(yintercept = median-sd*conf), trunc_norm_means[which(trunc_norm_means$cellline == pcell),], 
              linetype = 2)
-
 
 trunc_norm_runs <- merge(trunc_norm_runs, trunc_norm_means, 
                          by = c('antibody','cellline'))
-colnames(trunc_norm_runs) <- c(colnames(trunc_norm_runs)[1:6],'norm.mean','norm.median','norm.sd','global.mean','global.sd')
+colnames(trunc_norm_runs) <- c(colnames(trunc_norm_runs)[1:6],'norm.mean','norm.median','norm.sd','global.mean','global.median','global.sd')
 
-trunc_norm_runs[which((trunc_norm_runs$norm.mean < (trunc_norm_runs$global.mean - trunc_norm_runs$global.sd*conf) |
-  trunc_norm_runs$norm.mean > (trunc_norm_runs$global.mean + trunc_norm_runs$global.sd*conf))),1:5]
+trunc_norm_runs[which((trunc_norm_runs$norm.mean < (trunc_norm_runs$global.median - trunc_norm_runs$global.sd*conf) |
+  trunc_norm_runs$norm.median > (trunc_norm_runs$global.median + trunc_norm_runs$global.sd*conf))),1:5]
 
-removals2 <- trunc_norm_runs[which((trunc_norm_runs$norm.mean < (trunc_norm_runs$global.mean - trunc_norm_runs$global.sd*conf) |
-                                      trunc_norm_runs$norm.mean > (trunc_norm_runs$global.mean + trunc_norm_runs$global.sd*conf))),1:5]
+removals2 <- trunc_norm_runs[which((trunc_norm_runs$norm.median < (trunc_norm_runs$global.median - trunc_norm_runs$global.sd*conf) |
+                                      trunc_norm_runs$norm.median > (trunc_norm_runs$global.median + trunc_norm_runs$global.sd*conf))),1:5]
 
 for (r in seq(nrow(removals2))){
   trunc_norm_data <- trunc_norm_data[-which(trunc_norm_data$antibody == as.character(removals2$antibody[r]) &
@@ -423,7 +447,11 @@ trunc_norm_runs2 <- ddply(trunc_norm_data, .(antibody, cellline, timepoint, repl
                          log.median = round(median(fl),3),
                          sd = round(sd(fl), 3))
 
-
+trunc_norm_stats <- ddply(trunc_norm_runs2, .(antibody, cellline, timepoint, dose), summarize, 
+                          stat.mean = mean(log.mean), 
+                          stat.median = mean(log.median), 
+                          stat.meansd = sd(log.mean), 
+                          stat.mediansd = sd(log.median))
 
 
 ggplot(trunc_norm_runs[which(trunc_norm_runs$dose != 'CTRL'),], aes(x = cellline, y = norm.mean)) + 
@@ -440,10 +468,10 @@ pAb = 'ATF2'
 ggplot(trunc_norm_data[which(trunc_norm_data$cellline == pcell),], aes(x = replicate, y = fl, fill = dose)) +
   geom_boxplot(notch = TRUE, notchwidth = 0.25, outlier.color = NULL, position = "dodge") +
   facet_grid(antibody ~ timepoint) + 
-  geom_hline(aes(yintercept = mean), trunc_norm_means[which(trunc_norm_means$cellline == pcell),]) + 
-  geom_hline(aes(yintercept = mean+sd*conf), trunc_norm_means[which(trunc_norm_means$cellline == pcell),], 
+  geom_hline(aes(yintercept = median), trunc_norm_means[which(trunc_norm_means$cellline == pcell),]) + 
+  geom_hline(aes(yintercept = median+sd*conf), trunc_norm_means[which(trunc_norm_means$cellline == pcell),], 
              linetype = 2) + 
-  geom_hline(aes(yintercept = mean-sd*conf), trunc_norm_means[which(trunc_norm_means$cellline == pcell),], 
+  geom_hline(aes(yintercept = median-sd*conf), trunc_norm_means[which(trunc_norm_means$cellline == pcell),], 
               linetype = 2) #+ 
   # ggsave(filename = paste(figprefix, 'normalized_boxplot_byset_HCC.pdf', sep = ""),
   #        width = 8.5, height = 5.5, units = "in")
@@ -456,9 +484,14 @@ ggplot(trunc_norm_data[which(trunc_norm_data$cellline == pcell),], aes(x = dose,
 
 
 ggplot(trunc_norm_data[which(trunc_norm_data$antibody == pAb),], aes(x = dose, y = fl, fill = dose)) +
-  geom_boxplot(notch = TRUE, notchwidth = 0.25, outlier.color = NULL, position = "dodge") +
+  geom_violin(notch = TRUE, notchwidth = 0.25, outlier.color = NULL, position = "dodge") +
   facet_grid(cellline ~ timepoint) + 
-  geom_hline(yintercept = 1) 
+  geom_hline(yintercept = 1) + 
+  xlab('Dose') + 
+  ylab('Normalized log(fluorescence)') + 
+  ggtitle('ATF2 Dose Response') +
+  ggsave(filename = paste(figprefix, 'ATF2_combined_violin.pdf', sep = ""),
+         width = 8.5, height = 5.5, units = "in")
 
 
 ggplot(trunc_norm_data[which(trunc_norm_data$antibody == pAb),], aes(x = dose, y = fl, fill = dose)) +
@@ -466,10 +499,26 @@ ggplot(trunc_norm_data[which(trunc_norm_data$antibody == pAb),], aes(x = dose, y
   facet_grid(cellline ~ timepoint) + 
   geom_hline(yintercept = 1) 
 
+ggplot(trunc_norm_stats[which(trunc_norm_stats$antibody == pAb),], 
+       aes(x = dose, y = stat.median)) + 
+  geom_col() + 
+  geom_errorbar(aes(ymin = stat.median-stat.mediansd, ymax = stat.median+stat.mediansd)) +
+  facet_grid(cellline~timepoint) + 
+  geom_point(data = trunc_norm_runs2[which(trunc_norm_runs2$antibody == pAb & trunc_norm_runs2$dose != 'CTRL'),],
+             aes(y = log.median, color = experiment, shape = experiment, group = experiment), position = 'dodge', size = 3)
+
+ggplot(trunc_norm_runs2[which(trunc_norm_runs2$dose != 'CTRL'),], aes(x = log.mean, y = log.median)) + 
+  geom_point(aes(color = dose), size = 3) + 
+  facet_wrap(~cellline) + 
+  geom_abline(slope = 1, intercept = 0)
 
 
 
-
+write.csv(trunc_norm_runs2, file = 'FinalRuns_181030.csv', sep = ',', quote = FALSE)
+write.csv(ddply(trunc_norm_runs2, .(antibody, timepoint, cellline, dose), summarize, 
+      ave_median = mean(log.median), 
+      sd_median = sd(log.median)), 
+      file = 'FinalRuns_Summary_181030.csv', sep = ',', quote = FALSE)
 
 
 # inspect the data for systematic shifts
@@ -487,47 +536,47 @@ ggplot(runs[which(runs$cellline == 'HCC'),], aes(x = replicate, y = cellcount)) 
 
 runs[which(runs$cellcount < cellnumber),1:5]
 
-
-
-trunc_log_data <- ddply(tlog_df, .(antibody, cellline, timepoint, dose, replicate), 
-          function(x) head(x, cellnumber))
-
-trunc_runs <- ddply(trunc_log_data, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
-              log.mean = round(mean(fl), 3),
-              log.median = round(median(fl),3),
-              sd = round(sd(fl), 3))
-trunc_log_ctrl_means <- ddply(trunc_runs[which(runs$dose == 'CTRL'),],
-                        .(antibody, cellline, timepoint), summarize,
-                        mean = round(mean(log.mean), 3),
-                        median = round(mean(log.median),3),
-                        sd = round(sd(log.mean), 3))
-
-
-
-plot(runs$log.mean[order(runs$log.mean)], trunc_runs$log.mean[order(trunc_runs$log.mean)])
-plot(runs$log.median[order(runs$log.median)], trunc_runs$log.median[order(trunc_runs$log.median)])
-plot(runs$sd[order(runs$sd)], trunc_runs$sd[order(trunc_runs$sd)])
-
-
-
-
-
-
-mean(tlog_df$fl[which(tlog_df$antibody == 'ATF2' & tlog_df$dose == 'CTRL' &
-                        tlog_df$experiment == 'U')])
-
-
-
-
-
-
-norm_runs <- ddply(trunc_df, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
-                           log.mean = round(mean(fl), 3),
-                           sd = round(sd(fl), 3))
-ctrl_means <- ddply(norm_runs[which(runs$dose == 'CTRL'),],
-                        .(antibody, cellline, timepoint), summarize,
-                        mean = round(mean(log.mean), 3),
-                        sd = round(sd(log.mean), 3))
+# 
+# 
+# trunc_log_data <- ddply(tlog_df, .(antibody, cellline, timepoint, dose, replicate), 
+#           function(x) head(x, cellnumber))
+# 
+# trunc_runs <- ddply(trunc_log_data, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
+#               log.mean = round(mean(fl), 3),
+#               log.median = round(median(fl),3),
+#               sd = round(sd(fl), 3))
+# trunc_log_ctrl_means <- ddply(trunc_runs[which(runs$dose == 'CTRL'),],
+#                         .(antibody, cellline, timepoint), summarize,
+#                         mean = round(mean(log.mean), 3),
+#                         median = round(mean(log.median),3),
+#                         sd = round(sd(log.mean), 3))
+# 
+# 
+# 
+# plot(runs$log.mean[order(runs$log.mean)], trunc_runs$log.mean[order(trunc_runs$log.mean)])
+# plot(runs$log.median[order(runs$log.median)], trunc_runs$log.median[order(trunc_runs$log.median)])
+# plot(runs$sd[order(runs$sd)], trunc_runs$sd[order(trunc_runs$sd)])
+# 
+# 
+# 
+# 
+# 
+# 
+# mean(tlog_df$fl[which(tlog_df$antibody == 'ATF2' & tlog_df$dose == 'CTRL' &
+#                         tlog_df$experiment == 'U')])
+# 
+# 
+# 
+# 
+# 
+# 
+# norm_runs <- ddply(trunc_df, .(antibody, cellline, timepoint, replicate, dose, experiment), summarize,
+#                            log.mean = round(mean(fl), 3),
+#                            sd = round(sd(fl), 3))
+# ctrl_means <- ddply(norm_runs[which(runs$dose == 'CTRL'),],
+#                         .(antibody, cellline, timepoint), summarize,
+#                         mean = round(mean(log.mean), 3),
+#                         sd = round(sd(log.mean), 3))
 
 
 pAb = 'ATF2'
@@ -575,13 +624,12 @@ dixon.test(runs$log.mean[which(runs$antibody == 'ATF2' & runs$dose == 'CTRL')])
 n = 4000
 
 Dose = "HD"
-Cell = "SKBR3"
-Time = "4h 24h"
+Cell = "HCC"
+Time = "24h"
 Ab = "H2aX"
 
 
-indexer <- which(trunc_norm_data$dose == Dose &
-                   trunc_norm_data$cellline == Cell &
+indexer <- which(trunc_norm_data$cellline == Cell &
                    trunc_norm_data$timepoint == Time &
                    trunc_norm_data$antibody == Ab)
 
@@ -592,7 +640,7 @@ ref_indexer <- which(trunc_norm_data$dose == Dose &
                      #                  & trunc_norm_data$replicate == 'S1'
 )
 
-fitdata <- sample_n(trunc_norm_data[indexer,], n, replace = TRUE)
+fitdata <- trunc_norm_data[indexer,]
 refdata <- sample_n(trunc_norm_data[ref_indexer,], n)
 
 disdata <- fitdist(fitdata$fl, 'norm')
@@ -607,7 +655,7 @@ ks.test(unique(disdata$data), unique(refdisdata$data))
 #densityplot(fitdata$fl)
 #scores(disdata$data)
 #plot(ecdf(disdata$data))
-kruskal.test(fl ~ replicate, data = fitdata)
+kruskal.test(fl ~ dose, data = fitdata)
 #fit <- aov(fl ~ timepoint, data = tdf[which(tdf$dose == 'CTRL' & tdf$cellline == "BT549"),])
 fit <- aov(fl ~ replicate, data = fitdata)
 
@@ -642,7 +690,7 @@ ks.test(unique(ja3$data), unique(subdata2))
 
 # Wilcoxon Rank Sum Test
 wilcox.test(subdata, subdata2)
-kruskal.test(fl ~ dose, data = tdf[indexer,])
+kruskal.test(fl ~ dose, data = trunc_norm_data[indexer,])
 
 str(subdata)
 
@@ -660,14 +708,26 @@ t.test(x = trunc_norm_data$fl[which(trunc_norm_data$dose == "HD" &
 
 # ANOVA
 
-ano_hcc_h2ax <- aov(data = norm_runs[which(norm_runs$antibody == 'ATF2' 
-                                                 & norm_runs$cellline == 'BT549' 
-                                           & norm_runs$timepoint == '4h 24h'),], 
-                    log.mean ~ dose)
+ano_hcc_h2ax <- aov(data = trunc_norm_data[which(trunc_norm_data$antibody == 'ATF2' 
+                                                 & trunc_norm_data$cellline == 'BT549' 
+                                           & trunc_norm_data$timepoint == '24h 24h'),], 
+                    fl ~ dose)
 
 summary(glht(ano_hcc_h2ax, linfct=mcp(dose = "Dunnett")))
 
+anova(ano_hcc_h2ax)
 
+ano_hcc_h2ax <- lm(data = trunc_norm_runs2[which(trunc_norm_runs2$antibody == 'ATF2' 
+                                                 #& trunc_norm_runs2$cellline == 'HCC' 
+                                                 #& trunc_norm_runs2$dose == 'HD'
+                                                 & trunc_norm_runs2$timepoint == '24h 24h'
+                                                 ),], 
+                    log.median ~ dose + cellline + dose:cellline)
+
+#summary(ano_hcc_h2ax)
+summary(glht(ano_hcc_h2ax, linfct=mcp(dose = "Tukey")))
+Anova(ano_hcc_h2ax, type = 'II')
+summary(ano_hcc_h2ax)
 
 
 
@@ -678,7 +738,7 @@ load("/Volumes/Seagate Backup Plus Drive/Projects/DNA Damage/FACS/R/Workspaces/1
 
 
 # ---- Plot the raw data ----
-figprefix <- 'Figures/josh/'
+figprefix <- 'Figures/Deepa/'
 
 ggplot(tr_df[which(tr_df$dose == 'CTRL' & tr_df$antibody == 'ATF2'), ], aes(fl, fill = replicate, by = replicate)) +
   geom_density(alpha = alp,  adjust = bw) +

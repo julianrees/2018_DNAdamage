@@ -7,3 +7,6 @@ R.Rproj
 Figures/
 Workspaces/
 dataWorkup.*
+*.csv
+*.png
+*.html
