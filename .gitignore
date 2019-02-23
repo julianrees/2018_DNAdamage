@@ -7,3 +7,7 @@ R.Rproj
 Figures/
 Workspaces/
 dataWorkup.*
+FACS_figures/
+confocal_figures/
+confocal_data/
+.DS_Store
